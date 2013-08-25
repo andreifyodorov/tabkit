@@ -25,7 +25,8 @@ def main():
     data_desc = files.data_desc()
 
     if not args.no_header:
-        print str(data_desc)
+        sys.stdout.write(str(data_desc) + "\n")
+        sys.stdout.flush()
 
     files.call(['cat'])
 

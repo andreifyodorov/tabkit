@@ -3,6 +3,8 @@
 set -o pipefail
 set -o errexit
 
+###### cat
+
 # bad_header
 diff -b <(
     ./tcat.py <( echo "bad header" ) 2>&1
@@ -59,3 +61,38 @@ diff -b <(
 EOCASE) || echo "Failed test 'cat_from_file'"
 rm -r $temp_file1 $temp_file2
 trap - EXIT
+
+
+###### tcut
+
+# cut_keep
+diff -b <(
+    echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | ./tcut.py -f a,c
+) <(cat <<EOCASE
+# a:int c:str
+1   a
+2   b
+EOCASE) || echo "Failed test 'cut_keep'"
+
+# cut_keep_unknown_field
+diff -b <(
+    echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | ./tcut.py -f a,c,d 2>&1
+) <(cat <<EOCASE
+./tcut.py: No such field 'd'
+EOCASE) || echo "Failed test 'cut_keep_unknown_field'"
+
+# cut_remove
+diff -b <(
+    echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | ./tcut.py -r a,c
+) <(cat <<EOCASE 
+# b:float
+0.1
+0.2
+EOCASE) || echo "Failed test 'cut_remove'"
+
+# cut_remove_unknown_field
+diff -b <(
+    echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | ./tcut.py -r a,c,d 2>&1
+) <(cat <<EOCASE
+./tcut.py: No such field 'd'
+EOCASE) || echo "Failed test 'cut_remove_unknown_field'"

@@ -64,7 +64,7 @@ class Files(object):
 
     def call(self, args):
         cmd = (
-            args.pop() 
+            args.pop(0) 
             + " " + " ".join(quote(arg) for arg in args)
             + " " + " ".join(self.descriptors())
         )

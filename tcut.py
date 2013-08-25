@@ -5,7 +5,8 @@ import argparse
 import subprocess
 
 from tabkit.header import DataDesc
-from tabkit.utils import Files, handle_exceptions, add_common_args
+from tabkit.utils import Files, add_common_args
+from tabkit.exception import TabkitException, handle_exceptions
 
 def split_fields(string):
     return [field.strip() for field in string.split(",")]
@@ -23,7 +24,7 @@ def main():
     args = parser.parse_args()
 
     if not (args.fields or args.remove):
-        Exception("You must specify list of fields")
+        TabkitException("You must specify list of fields")
 
     files = Files(args.files)
 
@@ -47,10 +48,10 @@ def main():
     )
 
     if not args.no_header:
-        print str(data_desc)
+        sys.stdout.write(str(data_desc) + "\n")
+        sys.stdout.flush()
 
-    subprocess.call(['cut'] + options + list(files.descriptors()))
+    files.call(['cut'] + options)
 
 if __name__ == "__main__":
-#    handle_exceptions(main)
-    main()
+    handle_exceptions(main)
