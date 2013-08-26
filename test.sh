@@ -3,6 +3,10 @@
 set -o pipefail
 set -o errexit
 
+function failed {
+    echo "Failed test '$@'"; exit 1
+}
+
 ###### cat
 
 # bad_header
@@ -10,28 +14,28 @@ diff -b <(
     ./tcat.py <( echo "bad header" ) 2>&1
 ) <(cat <<EOCASE 
 ./tcat.py: Bad header in file '/dev/fd/63'
-EOCASE) || echo "Failed test 'bad_header'" && false
+EOCASE) || failed bad_header
 
 # bad_type
 diff -b <(
     ./tcat.py <( echo "# field:badtype" ) 2>&1
 ) <(cat <<EOCASE 
 ./tcat.py: Unknown type 'badtype' in file '/dev/fd/63'
-EOCASE) || echo "Failed test 'bad_type'" && false
+EOCASE) || failed bad_type
 
 # incompatible_header
 diff -b <(
     ./tcat.py <( echo "# a" ) <( echo "# a:int" ) <( echo "# b" ) 2>&1
 ) <(cat <<EOCASE 
 ./tcat.py: Incompatable headers in file '/dev/fd/61'
-EOCASE) || echo "Failed test 'incompatible_header'" && false
+EOCASE) || failed incompatible_header
 
 # compatible_header
 diff -b <(
     ./tcat.py <( echo "# a:int" ) <( echo "# a:float" ) <( echo "# a:bool" ) <( echo "# a:str" ) <( echo "# a" )
 ) <(cat <<EOCASE 
 # a
-EOCASE) || echo "Failed test 'compatible_header'" && false
+EOCASE) || failed compatible_header
 
 # cat_from_stream
 diff -b <(
@@ -42,7 +46,29 @@ diff -b <(
 2   0.2
 3   0.3
 4   0.4
-EOCASE) || echo "Failed test 'cat_from_stream'" && false
+EOCASE) || failed cat_from_stream
+
+# cat_unknow_order_field
+diff -b <(
+    echo -e "# a:int, b:float # ORDER: a,b,c" | ./tcat.py 2>&1
+) <(cat <<EOCASE 
+./tcat.py: Unknown order field 'c' in file '<stdin>'
+EOCASE) || failed cat_unknow_order_field
+
+# cat_remove_order
+diff -b <(
+    ./tcat.py <( echo -e "# a:int, b:float # ORDER: a,b:desc" ) <( echo -e "# a:int, b:float" )
+) <(cat <<EOCASE 
+# a:int b:float
+EOCASE) || failed cat_remove_order
+
+# cat_order_ok
+diff -b <(
+    echo -e "# a:int, b:float # ORDER: a,b:desc" | ./tcat.py
+) <(cat <<EOCASE 
+# a:int b:float # ORDER: a, b:desc
+EOCASE) || failed cat_order_ok
+
 
 # cat_from_file
 temp_file1=$(tempfile)
@@ -58,7 +84,7 @@ diff -b <(
 2   0.2
 3   0.3
 4   0.4
-EOCASE) || echo "Failed test 'cat_from_file'" && false
+EOCASE) || failed cat_from_file
 rm -r $temp_file1 $temp_file2
 trap - EXIT
 
@@ -72,14 +98,14 @@ diff -b <(
 # a:int c:str
 1   a
 2   b
-EOCASE) || echo "Failed test 'cut_keep'" && false
+EOCASE) || failed cut_keep
 
 # cut_keep_unknown_field
 diff -b <(
     echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | ./tcut.py -f a,c,d 2>&1
 ) <(cat <<EOCASE
 ./tcut.py: No such field 'd'
-EOCASE) || echo "Failed test 'cut_keep_unknown_field'" && false
+EOCASE) || failed cut_keep_unknown_field
 
 # cut_remove
 diff -b <(
@@ -88,11 +114,11 @@ diff -b <(
 # b:float
 0.1
 0.2
-EOCASE) || echo "Failed test 'cut_remove'" && false
+EOCASE) || failed cut_remove
 
 # cut_remove_unknown_field
 diff -b <(
     echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | ./tcut.py -r a,c,d 2>&1
 ) <(cat <<EOCASE
 ./tcut.py: No such field 'd'
-EOCASE) || echo "Failed test 'cut_remove_unknown_field'" && false
+EOCASE) || failed cut_remove_unknown_field

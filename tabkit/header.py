@@ -1,23 +1,37 @@
 import re
 from type import parse_type, generic_type
 from exception import TabkitException
+from collections import namedtuple
+
+Field = namedtuple('Field', 'name type')
+OrderField = namedtuple('OrderField', 'name desc')
 
 class DataDesc(object):
     def __init__(self, fields, order=None):
-        self.fields = fields
-        self.field_names = [name for name, type in fields]
-        self.order = order
+        self.fields = [Field(name, type) for name, type in fields]
+        self.field_names = [f.name for f in self.fields]
+        self.field_indices = dict((f.name, index) for index, f in enumerate(self.fields))
+
+        if order:
+            self.order = [OrderField(name, desc) for name, desc in order]
+            for f in self.order:
+                try:
+                    self.index(f.name)
+                except TabkitException:
+                    raise TabkitException("Unknown order field '%s'" % (f.name,))
+        else:
+            self.order = None
 
     def __str__(self):
-        header = "\t".join("%s:%s" % (name, type.__name__) if type else name for name, type in self.fields)
+        header = "\t".join("%s:%s" % (f.name, f.type.__name__) if f.type else f.name for f in self.fields)
         if self.order:
-            header += "\t# ORDER: " + ", ".join("%s:desc" % (name,) if desc else name for name, desc in self.order)
+            header += "\t# ORDER: " + ", ".join("%s:desc" % (f.name,) if f.desc else f.name for f in self.order)
         return "# " + header
 
     def index(self, field_name):
-        try:
-            return self.field_names.index(field_name)
-        except ValueError:
+        if self.field_indices.has_key(field_name):
+            return self.field_indices[field_name]
+        else:
             raise TabkitException("No such field '%s'" % (field_name,))
 
 def split_fields(string):
@@ -74,11 +88,11 @@ def generic_data_desc(desc1, desc2):
         raise TabkitException("Incompatable headers")
 
     fields = []
-    for (name1, type1), (name2, type2) in zip(desc1.fields, desc2.fields):
-        if name1 != name2:
+    for f1, f2 in zip(desc1.fields, desc2.fields):
+        if f1.name != f2.name:
             raise TabkitException("Incompatable headers")
 
-        fields.append((name1, generic_type(type1, type2)))
+        fields.append((f1.name, generic_type(f1.type, f2.type)))
 
     order = []
         
