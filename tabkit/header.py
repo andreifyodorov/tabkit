@@ -28,8 +28,14 @@ class DataDesc(object):
             header += "\t# ORDER: " + ", ".join("%s:desc" % (f.name,) if f.desc else f.name for f in self.order)
         return "# " + header
 
+    def has_field(self, field_name):
+        return self.field_indices.has_key(field_name)
+
+    def get_field(self, field_name):
+        return self.fields[self.index(field_name)]
+
     def index(self, field_name):
-        if self.field_indices.has_key(field_name):
+        if self.has_field(field_name):
             return self.field_indices[field_name]
         else:
             raise TabkitException("No such field '%s'" % (field_name,))

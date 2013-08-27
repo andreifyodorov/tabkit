@@ -28,5 +28,12 @@ def generic_type(*types):
     if bool in types:
         return bool
 
-def infer_type():
-    pass
+def infer_type(op, *types):
+    if op in '+-*':
+        if float in types:
+            return float
+        else:
+            return int
+    elif op == "/":
+        return float
+    raise TabkitException("Unable to infer type for operation '%s'" % (op,))
