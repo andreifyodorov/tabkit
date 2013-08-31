@@ -36,4 +36,7 @@ def infer_type(op, *types):
             return int
     elif op == "/":
         return float
+    elif op in ['==', '!=', '<', '<=', '>', '>=', '&&', '||']:
+        return bool
+
     raise TabkitException("Unable to infer type for operation '%s'" % (op,))

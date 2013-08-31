@@ -9,9 +9,9 @@ from type import infer_type
 class AwkProgram(object):
     def __init__(self):
         self.begin = str()
-        self.row_expr = str()
-        self.output_cond = str()
-        self.output = str()
+        self.row_exprs = list()
+        self.output_cond = list()
+        self.output = list()
         self.end = str()
 
     def __str__(self):
@@ -20,13 +20,16 @@ class AwkProgram(object):
             begin = "BEGIN{%s}" % (self.begin,)
 
         body = str()
-        if self.row_expr:
-            body = self.row_expr
+        if self.row_exprs:
+            body = "".join("%s;" % (expr,) for expr in self.row_exprs)
 
         if self.output_cond:
-            body += "if(%s){print %s;}" % (self.output_cond, self.output)
+            body += "if(%s){print %s;}" % (
+                "&&".join(self.output_cond), 
+                ",".join(self.output)
+            )
         else:
-            body += "print %s;" % (self.output,)
+            body += "print %s;" % (",".join(self.output),)
             
         end = str()
         if self.end:
@@ -34,26 +37,40 @@ class AwkProgram(object):
         return "%s{%s}%s" % (begin, body, end)
 
 
-def map_program(data_desc, output_expr, filter_expr=None):
+def map_program(data_desc, output_exprs, filter_exprs=None):
     r'''
     >>> from header import parse_header
     >>> data_desc = parse_header("# a, b, c, d")
-    >>> awk, data_desc = map_program(data_desc, 'a=b+c;b=a/c;_hidden=a*3;new=_hidden/3;b=a+1;a;b;c;d;')
+    >>> awk, data_desc = map_program(
+    ...     data_desc, 
+    ...     output_exprs = ['a=b+c;b=a/c;_hidden=a*3;', 'new=_hidden/3', 'b=a+1', 'a', 'b', 'c', 'd'],
+    ...     filter_exprs = ['new==a*d or new==d*a', '_hidden>=new']
+    ... )
     >>> str(awk)
-    '{__var__0=$2+$3;__var__1=$1/$3;__var__2=$1*3;__var__3=__var__2/3;__var__1=$1+1;print __var__0,__var__1,__var__3;}'
+    '{__var__0=($2+$3);__var__1=($1/$3);__var__2=($1*3);__var__3=(__var__2/3);__var__1=($1+1);if((__var__3==($1*$4)||__var__3==($4*$1))&&__var__2>=__var__3){print __var__0,__var__1,__var__3,$3,$4;}}'
     >>> str(data_desc)
-    '# a:int\tb:int\tnew:float'
+    '# a:int\tb:int\tnew:float\tc\td'
     '''
+    filter_exprs = filter_exprs or list()
+
     program = AwkProgram()
 
-    try:
-        tree = ast.parse(output_expr)
-    except SyntaxError as e:
-        raise TabkitException("Syntax error: %s" % (e.msg,))
-
-    output = AwkGenerator(data_desc)
-    program.row_expr = output.visit(tree)
+    output = OutputAwkGenerator(data_desc)
+    for output_expr in output_exprs:
+        try:
+            tree = ast.parse(output_expr)
+        except SyntaxError as e:
+            raise TabkitException("Syntax error: %s" % (e.msg,))
+        program.row_exprs.extend(output.visit(tree))
     program.output = output.output_code()
+
+    cond = ConditionAwkGenerator(data_desc, output.context)
+    for filter_expr in filter_exprs:
+        try:
+            tree = ast.parse(filter_expr)
+        except SyntaxError as e:
+            raise TabkitException("Syntax error: %s" % (e.msg,))
+        program.output_cond.extend(cond.visit(tree))
 
     return program, output.output_data_desc()
 
@@ -67,57 +84,50 @@ class AwkGenerator(ast.NodeVisitor):
         ast.Div: '/'
     }
 
-    def __init__(self, data_desc):
+    compareops = {
+        ast.Eq: '==',
+        ast.NotEq: '!=',
+        ast.Lt: '<',
+        ast.LtE: '<=', 
+        ast.Gt: '>',
+        ast.GtE: '>='
+    }
+
+    boolops = {
+        ast.And: '&&',
+        ast.Or: '||'
+    }
+
+    def __init__(self, data_desc, context=None):
         self.data_desc = data_desc
-        self.context = dict()
-        self.output = list()
+        self.context = context or dict()
         super(AwkGenerator, self).__init__()
 
-    def output_data_desc(self):
-        return DataDesc((name, self.context[name].type) for name in self.output)
+    def visit_Expr(self, node):
+        return self.visit(node.value)
 
-    def output_code(self):
-        return ",".join(self.context[name].code for name in self.output)
+    def visit_Compare(self, node):
+        if not (len(node.ops) == 1 and len(node.comparators) == 1):
+            raise TabkitException("Syntax error: multiple comparators are not supported")
 
-    def visit_Module(self, node):
-        code = str()
-        for stmt in node.body:
-            if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Name)):
-                field_name = stmt.value.id
-                if self.data_desc.has_field(field_name):
-                    if field_name not in self.context:
-                        self.context[field_name] = Expr(
-                            code = "$%d" % (self.data_desc.index(field_name) + 1,),
-                            type = self.data_desc.get_field(field_name).type
-                        )
-                        self.output.append(field_name)
-                    continue
-                
-            code += self.visit(stmt) + ";"
-
-        return code
-
-    def visit_Assign(self, node):
-        if len(node.targets) != 1:
-            raise TabkitException('Syntax error: multiple targets are not allowed in assignment')
-
-        target_name = node.targets[0].id
-        if target_name in self.context:
-            target_var_name = self.context[target_name].code
-        else:
-            target_var_name = "__var__%d" % (len(self.context,))
-            if not target_name.startswith("_"):
-                self.output.append(target_name)
-
-        value = self.visit(node.value)
-
-        assign_expr = Expr(
-            code = target_var_name,
-            type = value.type
+        op = self.compareops.get(type(node.ops[0]))
+        if op is None:
+            raise TabkitException("Syntax error: compare operation '%s' is not suported" % (node.ops[0].__class__.__name__,))
+            
+        left_expr = self.visit(node.left)
+        right_expr = self.visit(node.comparators[0])
+        return Expr(
+            code = left_expr.code + op + right_expr.code,
+            type = infer_type(op, left_expr.type, right_expr.type)
         )
-        self.context[target_name] = assign_expr
 
-        return "%s=%s" % (assign_expr.code, value.code)
+    def visit_BoolOp(self, node):
+        op = self.boolops[type(node.op)]
+        exprs = [self.visit(value) for value in node.values]
+        return Expr(
+            code = "(" + op.join(expr.code for expr in exprs) + ")",
+            type = infer_type(op, *(expr.type for expr in exprs))
+        )
 
     def visit_BinOp(self, node):
         op = self.binops.get(type(node.op), None)
@@ -126,9 +136,8 @@ class AwkGenerator(ast.NodeVisitor):
 
         left_expr = self.visit(node.left)
         right_expr = self.visit(node.right)
-
         return Expr(
-            code = left_expr.code + op + right_expr.code,
+            code = "(" + left_expr.code + op + right_expr.code + ")",
             type = infer_type(op, left_expr.type, right_expr.type)
         )
 
@@ -156,6 +165,69 @@ class AwkGenerator(ast.NodeVisitor):
 
     def generic_visit(self, node):
         raise TabkitException("Syntax error: '%s' is not supported" % (node.__class__.__name__,))
+
+
+class OutputAwkGenerator(AwkGenerator):
+
+    def __init__(self, data_desc, context=None):
+        self.output = list()
+        super(OutputAwkGenerator, self).__init__(data_desc, context)
+
+    def output_code(self):
+        return (self.context[name].code for name in self.output)
+
+    def output_data_desc(self):
+        return DataDesc((name, self.context[name].type) for name in self.output)
+
+    def visit_Module(self, node):
+        code = list()
+        for stmt in node.body:
+            # special case, no calculations, only output
+            if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Name)):
+                field_name = stmt.value.id
+                if self.data_desc.has_field(field_name):
+                    if field_name not in self.context:
+                        self.context[field_name] = Expr(
+                            code = "$%d" % (self.data_desc.index(field_name) + 1,),
+                            type = self.data_desc.get_field(field_name).type
+                        )
+                        self.output.append(field_name)
+                    continue
+                
+            code.append(self.visit(stmt))
+
+        return code
+
+    def visit_Assign(self, node):
+        if len(node.targets) != 1:
+            raise TabkitException('Syntax error: multiple targets are not allowed in assignment')
+
+        target_name = node.targets[0].id
+        if target_name in self.context:
+            target_var_name = self.context[target_name].code
+        else:
+            target_var_name = "__var__%d" % (len(self.context,))
+            if not target_name.startswith("_"):
+                self.output.append(target_name)
+
+        value = self.visit(node.value)
+
+        assign_expr = Expr(
+            code = target_var_name,
+            type = value.type
+        )
+        self.context[target_name] = assign_expr
+
+        return "%s=%s" % (assign_expr.code, value.code)
+
+
+class ConditionAwkGenerator(AwkGenerator):
+
+    def visit_Module(self, node):
+        code = list()
+        for stmt in node.body:
+            code.append(self.visit(stmt).code)
+        return code
 
 if __name__ == "__main__":
     import doctest
