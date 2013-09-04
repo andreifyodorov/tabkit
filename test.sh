@@ -3,6 +3,10 @@
 set -o pipefail
 set -o errexit
 
+function tempfile {
+	mktemp -t tabkit_tmp
+}
+
 function failed {
     echo "Failed test '$@'"; exit 1
 }

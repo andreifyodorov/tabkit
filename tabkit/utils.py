@@ -20,6 +20,7 @@ class RegularFile(File):
     def header(self):
         return self.fd.readline().rstrip()
     def descriptor(self):
+        os.lseek(self.fd.fileno(), 0, os.SEEK_SET)
         return "<( tail -n+2 %s )" % (super(RegularFile, self).descriptor(),)
 
 class StreamFile(File):
@@ -64,7 +65,8 @@ class Files(object):
 
     def call(self, args):
         cmd = (
-            args.pop(0) 
+            "LC_ALL=C "
+            + args.pop(0) 
             + " " + " ".join(quote(arg) for arg in args)
             + " " + " ".join(self.descriptors())
         )
