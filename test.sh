@@ -4,7 +4,7 @@ set -o pipefail
 set -o errexit
 
 function tempfile {
-	mktemp -t tabkit_tmp
+    mktemp /tmp/tabkit_tmp.XXXXXX
 }
 
 function failed {
