@@ -41,14 +41,14 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
     r'''
     >>> from header import parse_header
     >>> data_desc = parse_header("# a, b, c, d")
-    >>> awk, data_desc = map_program(
+    >>> awk, output_data_desc = map_program(
     ...     data_desc, 
     ...     output_exprs = ['a=b+c;b=a/c;_hidden=a*3;', 'new=_hidden/3', 'b=a+1', 'a', 'b', 'c', 'd'],
     ...     filter_exprs = ['new==a*d or new==d*a', '_hidden>=new']
     ... )
     >>> str(awk)
     '{__var__0=($2+$3);__var__1=($1/$3);__var__2=($1*3);__var__3=(__var__2/3);__var__1=($1+1);if((__var__3==($1*$4)||__var__3==($4*$1))&&__var__2>=__var__3){print __var__0,__var__1,__var__3,$3,$4;}}'
-    >>> str(data_desc)
+    >>> str(output_data_desc)
     '# a:int\tb:int\tnew:float\tc\td'
     '''
     filter_exprs = filter_exprs or list()
@@ -97,6 +97,8 @@ class AwkGenerator(ast.NodeVisitor):
         ast.And: '&&',
         ast.Or: '||'
     }
+
+    allowed_funcs = set("int sprintf".split())
 
     def __init__(self, data_desc, context=None):
         self.data_desc = data_desc
@@ -147,6 +149,16 @@ class AwkGenerator(ast.NodeVisitor):
             type = type(node.n)
         )
 
+    def visit_Call(self, node):
+        func = node.func.id
+        if func not in self.allowed_funcs:
+            raise TabkitException("Syntax error: unknown function '%s'" % (func,))
+        args = [self.visit(arg) for arg in node.args]
+        return Expr(
+            code = "%s(%s)" % (func, ",".join(arg.code for arg in args)),
+            type = infer_type(func, *(arg.type for arg in args))
+        )
+
     def visit_Name(self, node):
         try:
             field_index = self.data_desc.index(node.id)
@@ -193,8 +205,12 @@ class OutputAwkGenerator(AwkGenerator):
                         )
                         self.output.append(field_name)
                     continue
-                
-            code.append(self.visit(stmt))
+
+            expr = self.visit(stmt)
+            if expr.type is not None: # returned only by visit_Assign
+                raise TabkitException('Syntax error: assign statement or field name expected')
+
+            code.append(expr.code)
 
         return code
 
@@ -218,11 +234,12 @@ class OutputAwkGenerator(AwkGenerator):
         )
         self.context[target_name] = assign_expr
 
-        return "%s=%s" % (assign_expr.code, value.code)
-
+        return Expr(
+            code = "%s=%s" % (assign_expr.code, value.code),
+            type = None
+        )
 
 class ConditionAwkGenerator(AwkGenerator):
-
     def visit_Module(self, node):
         code = list()
         for stmt in node.body:

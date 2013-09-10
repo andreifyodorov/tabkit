@@ -126,3 +126,30 @@ diff -b <(
 ) <(cat <<EOCASE
 ./tcut.py: No such field 'd'
 EOCASE) || failed cut_remove_unknown_field
+
+
+###### tmap_awk
+
+# map_uknown_identifier
+diff -b <(
+    echo -e "# a, b, c, d" | ./tmap_awk.py -o "z" 2>&1
+) <(cat <<EOCASE
+./tmap_awk.py: Unknown identifier 'z'
+EOCASE) || failed map_uknown_identifier
+
+# failed map_bad_output_expr
+diff -b <(
+    echo -e "# a, b, c, d" | ./tmap_awk.py -o "a==b and b==c" 2>&1
+) <(cat <<EOCASE
+./tmap_awk.py: Syntax error: assign statement or field name expected
+EOCASE) || failed map_bad_output_expr
+
+# failed map_bad_output_expr
+diff -b <(
+    echo -e "# a\n0.1\n1.5\n1.9" | ./tmap_awk.py -o "x=int(a)" 2>&1
+) <(cat <<EOCASE
+# x:int
+0
+1
+1
+EOCASE) || failed map_bad_output_expr
