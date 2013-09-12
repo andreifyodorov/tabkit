@@ -3,8 +3,9 @@ import sys
 class TabkitException(Exception):
     pass
 
-def handle_exceptions(main):
+def handle_exceptions(f, stderr=None):
+    stderr = stderr or sys.stderr
     try:
-        main()
+        return f()
     except TabkitException as e:
-        print >> sys.stderr, "%s: %s" % (sys.argv[0], e)
+        print >> stderr, "%s: %s" % (sys.argv[0], e)
