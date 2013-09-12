@@ -11,6 +11,14 @@ function failed {
     echo "Failed test '$@'"; exit 1
 }
 
+###### doctests
+(
+    cd tabkit
+    ls *.py | xargs -n1 python
+)
+
+
+
 ###### cat
 
 # bad_header
@@ -31,7 +39,7 @@ EOCASE) || failed bad_type
 diff -b <(
     ./tcat.py <( echo "# a" ) <( echo "# a:int" ) <( echo "# b" ) 2>&1
 ) <(cat <<EOCASE 
-./tcat.py: Incompatable headers in file '/dev/fd/61'
+./tcat.py: Incompatible headers in file '/dev/fd/61'
 EOCASE) || failed incompatible_header
 
 # compatible_header
