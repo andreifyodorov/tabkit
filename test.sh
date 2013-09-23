@@ -145,14 +145,14 @@ diff -b <(
 ./tmap_awk.py: Unknown identifier 'z'
 EOCASE) || failed map_uknown_identifier
 
-# failed map_bad_output_expr
+# map_bad_output_expr
 diff -b <(
     echo -e "# a, b, c, d" | ./tmap_awk.py -o "a==b and b==c" 2>&1
 ) <(cat <<EOCASE
 ./tmap_awk.py: Syntax error: assign statement or field name expected
 EOCASE) || failed map_bad_output_expr
 
-# failed map_bad_output_expr
+# map_int
 diff -b <(
     echo -e "# a\n0.1\n1.5\n1.9" | ./tmap_awk.py -o "x=int(a)" 2>&1
 ) <(cat <<EOCASE
@@ -160,4 +160,14 @@ diff -b <(
 0
 1
 1
-EOCASE) || failed map_bad_output_expr
+EOCASE) || failed map_int
+
+# map_sprintf
+diff -b <(
+    echo -e "# a, b\n1\ta'\n2\t\"b\n3\tc" | ./tmap_awk.py -o "x=sprintf('%.02f,%s', a, b)"
+) <(
+    echo '# x:str'
+    echo "1.00,a'"
+    echo '2.00,"b'
+    echo '3.00,c'
+) || failed map_sprintf

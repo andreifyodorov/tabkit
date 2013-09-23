@@ -40,7 +40,7 @@ def infer_type(op, *types):
         return bool
     elif op == "int":
         return int
-    elif op == "sprtinf":
+    elif op == "sprintf":
         return str
 
     raise TabkitException("Unable to infer type for operation '%s'" % (op,))

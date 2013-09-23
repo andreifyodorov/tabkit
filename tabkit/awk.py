@@ -149,6 +149,12 @@ class AwkGenerator(ast.NodeVisitor):
             type = type(node.n)
         )
 
+    def visit_Str(self, node):
+        return Expr(
+            code = '"%s"' % node.s.replace('"', '\\"'),
+            type = str
+        )
+
     def visit_Call(self, node):
         func = node.func.id
         if func not in self.allowed_funcs:
