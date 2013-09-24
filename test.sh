@@ -15,7 +15,7 @@ function failed {
 (
     cd tabkit
     ls *.py | xargs -n1 python
-)
+) || failed doctests
 
 
 
@@ -142,14 +142,14 @@ EOCASE) || failed cut_remove_unknown_field
 diff -b <(
     echo -e "# a, b, c, d" | ./tmap_awk.py -o "z" 2>&1
 ) <(cat <<EOCASE
-./tmap_awk.py: Unknown identifier 'z'
+./tmap_awk.py: Unknown identifier 'z' in output expressions
 EOCASE) || failed map_uknown_identifier
 
 # map_bad_output_expr
 diff -b <(
     echo -e "# a, b, c, d" | ./tmap_awk.py -o "a==b and b==c" 2>&1
 ) <(cat <<EOCASE
-./tmap_awk.py: Syntax error: assign statement or field name expected
+./tmap_awk.py: Syntax error: assign statements or field names expected in output expressions
 EOCASE) || failed map_bad_output_expr
 
 # map_int
@@ -171,3 +171,23 @@ diff -b <(
     echo '2.00,"b'
     echo '3.00,c'
 ) || failed map_sprintf
+
+# map_math
+diff -b <(
+    echo -e "# a\n2\n3\n4" | ./tmap_awk.py -o "v=a+a;w=a-a;x=a*a;y=a/a;z=a**2"
+) <(cat <<EOCASE
+# v:int w:int   x:int   y:float z:int
+4  0   4   1   4
+6  0   9   1   9
+8  0  16   1  16
+EOCASE) || failed map_power
+
+# map_log_exp
+diff -b <(
+    echo -e "# a\n2\n3\n4" | ./tmap_awk.py -o "x=log(exp(a))"
+) <(cat <<EOCASE
+# x:float
+2
+3
+4
+EOCASE) || failed map_log_exp

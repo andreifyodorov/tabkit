@@ -55,22 +55,28 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
 
     program = AwkProgram()
 
-    output = OutputAwkGenerator(data_desc)
-    for output_expr in output_exprs:
-        try:
-            tree = ast.parse(output_expr)
-        except SyntaxError as e:
-            raise TabkitException("Syntax error: %s" % (e.msg,))
-        program.row_exprs.extend(output.visit(tree))
-    program.output = output.output_code()
+    try:
+        output = OutputAwkGenerator(data_desc)
+        for output_expr in output_exprs:
+            try:
+                tree = ast.parse(output_expr)
+            except SyntaxError as e:
+                raise TabkitException("Syntax error: %s" % (e.msg,))
+            program.row_exprs.extend(output.visit(tree))
+        program.output = output.output_code()
+    except TabkitException as e:
+        raise TabkitException("%s in output expressions" % (e,))
 
-    cond = ConditionAwkGenerator(data_desc, output.context)
-    for filter_expr in filter_exprs:
-        try:
-            tree = ast.parse(filter_expr)
-        except SyntaxError as e:
-            raise TabkitException("Syntax error: %s" % (e.msg,))
-        program.output_cond.extend(cond.visit(tree))
+    try:
+        cond = ConditionAwkGenerator(data_desc, output.context)
+        for filter_expr in filter_exprs:
+            try:
+                tree = ast.parse(filter_expr)
+            except SyntaxError as e:
+                raise TabkitException("Syntax error: %s in filter expressions" % (e.msg,))
+            program.output_cond.extend(cond.visit(tree))
+    except TabkitException as e:
+        raise TabkitException("%s in filter expressions" % (e,))
 
     return program, output.output_data_desc()
 
@@ -81,6 +87,7 @@ class AwkGenerator(ast.NodeVisitor):
         ast.Add: '+',
         ast.Sub: '-',
         ast.Mult: '*',
+        ast.Pow: '**',
         ast.Div: '/'
     }
 
@@ -98,7 +105,7 @@ class AwkGenerator(ast.NodeVisitor):
         ast.Or: '||'
     }
 
-    allowed_funcs = set("int sprintf".split())
+    allowed_funcs = set("int sprintf log exp".split())
 
     def __init__(self, data_desc, context=None):
         self.data_desc = data_desc
@@ -214,7 +221,7 @@ class OutputAwkGenerator(AwkGenerator):
 
             expr = self.visit(stmt)
             if expr.type is not None: # returned only by visit_Assign
-                raise TabkitException('Syntax error: assign statement or field name expected')
+                raise TabkitException('Syntax error: assign statements or field names expected')
 
             code.append(expr.code)
 
@@ -254,4 +261,4 @@ class ConditionAwkGenerator(AwkGenerator):
 
 if __name__ == "__main__":
     import doctest
-    doctest.testmod()
+    doctest.testmod(raise_on_error=True)

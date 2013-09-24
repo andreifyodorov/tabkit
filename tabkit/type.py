@@ -29,7 +29,7 @@ def generic_type(*types):
         return bool
 
 def infer_type(op, *types):
-    if op in '+-*':
+    if op in ['+', '-', '*', '**']:
         if float in types:
             return float
         else:
@@ -42,5 +42,7 @@ def infer_type(op, *types):
         return int
     elif op == "sprintf":
         return str
+    elif op in ['log', 'exp']:
+        return float
 
     raise TabkitException("Unable to infer type for operation '%s'" % (op,))
