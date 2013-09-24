@@ -22,20 +22,7 @@ class DataDesc(object):
             self.order = None
 
     def __str__(self):
-        header = "\t".join("%s:%s" % (f.name, f.type.__name__) if f.type else f.name for f in self.fields)
-        if self.order:
-            header += (
-                "\t# ORDER: " +
-                ", ".join(
-                    "%s%s%s" % (
-                        o.name,
-                        ":" + o.type if o.type != 'str' else '',
-                        ":desc" if o.desc else ''
-                    )
-                    for o in self.order
-                )
-            )
-        return "# " + header
+        return make_header(self)
 
     def has_field(self, field_name):
         return self.field_indices.has_key(field_name)
@@ -127,6 +114,23 @@ def parse_header(header_str):
     return DataDesc(fields, order)
 
 
+def make_header(desc):
+    header = "\t".join("%s:%s" % (f.name, f.type.__name__) if f.type else f.name for f in desc.fields)
+    if desc.order:
+        header += (
+            "\t# ORDER: " +
+            ", ".join(
+                "%s%s%s" % (
+                    o.name,
+                    ":" + o.type if o.type != 'str' else '',
+                    ":desc" if o.desc else ''
+                )
+                for o in desc.order
+            )
+        )
+    return "# " + header
+
+
 def generic_data_desc(desc1, desc2):
     r'''
     >>> d1 = parse_header("# a:int, b:float")
@@ -158,4 +162,4 @@ def generic_data_desc(desc1, desc2):
 
 if __name__ == "__main__":
     import doctest
-    doctest.testmod()
+    doctest.testmod(raise_on_error=True)
