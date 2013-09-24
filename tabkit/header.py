@@ -5,6 +5,7 @@ from collections import namedtuple
 
 Field = namedtuple('Field', 'name type')
 OrderField = namedtuple('OrderField', 'name type desc')
+
 ORDER_TYPES = set(['str', 'num', 'generic'])
 
 class DataDesc(object):
