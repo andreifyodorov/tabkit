@@ -2,7 +2,6 @@
 
 import sys
 import argparse
-import subprocess
 
 from tabkit.header import DataDesc
 from tabkit.utils import Files, add_common_args

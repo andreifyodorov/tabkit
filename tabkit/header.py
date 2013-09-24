@@ -4,9 +4,16 @@ from exception import TabkitException
 from collections import namedtuple
 
 Field = namedtuple('Field', 'name type')
-OrderField = namedtuple('OrderField', 'name type desc')
 
 ORDER_TYPES = set(['str', 'num', 'generic'])
+
+class OrderField(object):
+    def __init__(self, name, type=None, desc=None):
+        self.name = name
+        self.type = type or 'str'
+        self.desc = desc
+    def __repr__(self):
+        return "<%s.%s: %s, %s, %s>" % (__name__, self.__class__.__name__, self.name, self.type, self.desc)
 
 class DataDesc(object):
     def __init__(self, fields, order=None):
@@ -15,10 +22,10 @@ class DataDesc(object):
         self.field_indices = dict((f.name, index) for index, f in enumerate(self.fields))
 
         if order:
-            self.order = [OrderField(name, type or 'str', desc) for name, type, desc in order]
-            for f in self.order:
+            for f in order:
                 if not self.has_field(f.name):
                     raise TabkitException("Unknown order field '%s'" % (f.name,))
+            self.order = order
         else:
             self.order = None
 
@@ -103,7 +110,7 @@ def parse_header(header_str):
     order_index = header_str.find("# ORDER:")
     if order_index >= 0:
         header_str, order_str = (header_str[:order_index - 1], header_str[order_index + len("# ORDER:"):])
-        order = parse_order(order_str)
+        order = [OrderField(name, type, desc) for name, type, desc in parse_order(order_str)]
     else:
         order = None
 
