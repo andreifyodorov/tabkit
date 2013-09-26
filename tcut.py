@@ -41,9 +41,15 @@ def main():
     options = ['-f']
     options.append(",".join(str(index+1) for index in field_indices))
 
+    order = []
+    for order_key in data_desc.order:
+        if not order_key.name in fields:
+            break
+        order.append(order_key)
+
     data_desc = DataDesc(
         fields = [(name, type) for name, type in data_desc.fields if name in fields],
-        order = None # TODO
+        order = order
     )
 
     if not args.no_header:

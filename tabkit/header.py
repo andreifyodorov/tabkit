@@ -27,7 +27,7 @@ class DataDesc(object):
                     raise TabkitException("Unknown order field '%s'" % (f.name,))
             self.order = order
         else:
-            self.order = None
+            self.order = []
 
     def __str__(self):
         return make_header(self)

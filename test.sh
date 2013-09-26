@@ -135,6 +135,13 @@ diff -b <(
 ./tcut.py: No such field 'd'
 EOCASE) || failed cut_remove_unknown_field
 
+# cut_keep_order
+diff -b <(
+    echo -e "# a,b,c,d # ORDER: a,b,c,d" | ./tcut.py -f a,b,d
+) <(cat <<EOCASE 
+# a b d # ORDER: a, b
+EOCASE) || failed cut_keep_order
+
 
 ###### tmap_awk
 
