@@ -198,3 +198,26 @@ diff -b <(
 3
 4
 EOCASE) || failed map_log_exp
+
+
+###### tsrt
+
+# sort_num
+diff -b <(
+    echo -e "# a, b\na\t10\na\t2\nb\t3" | ./tsrt.py -k a:desc,b:num
+) <(cat <<EOCASE
+# a b # ORDER: a:desc, b:num
+b  3
+a  2
+a  10
+EOCASE) || failed sort_num
+
+# sort_generic
+diff -b <(
+    echo -e "# a\n.1e5\n.2e4\n.3e3" | ./tsrt.py -k a:generic
+) <(cat <<EOCASE
+# a # ORDER: a:generic
+.3e3
+.2e4
+.1e5
+EOCASE) || failed sort_generic
