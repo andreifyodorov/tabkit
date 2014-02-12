@@ -17,4 +17,5 @@ setup(
     author="Andrei Fyodorov",
     author_email="sour-times@yandex.ru",
     description="Coreutils-like kit for headed tab-separated files processing",
+    license="PSF"
 )
