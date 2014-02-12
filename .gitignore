@@ -1,2 +1,5 @@
 /env.tabkit
+/build
+/dist
+/tabkit.egg-info
 *.pyc
