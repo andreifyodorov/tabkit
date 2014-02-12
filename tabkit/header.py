@@ -1,11 +1,14 @@
 import re
+from collections import namedtuple
+
 from type import parse_type, generic_type
 from exception import TabkitException
-from collections import namedtuple
+
 
 Field = namedtuple('Field', 'name type')
 
 ORDER_TYPES = set(['str', 'num', 'generic'])
+
 
 class OrderField(object):
     def __init__(self, name, type=None, desc=None):
@@ -14,6 +17,7 @@ class OrderField(object):
         self.desc = desc
     def __repr__(self):
         return "<%s.%s: %s, %s, %s>" % (__name__, self.__class__.__name__, self.name, self.type, self.desc)
+
 
 class DataDesc(object):
     def __init__(self, fields, order=None):
@@ -44,12 +48,14 @@ class DataDesc(object):
         else:
             raise TabkitException("No such field '%s'" % (field_name,))
 
+
 def split_fields(string):
     for field in re.findall('[^,\s]+', string):
         if ":" in field:
             yield tuple(field.split(':', 1))
         else:
             yield (field, None)
+
 
 def parse_order(string):
     '''
@@ -88,6 +94,7 @@ def parse_order(string):
             yield (order_name, order_type, order_desc)
         except ValueError:
             raise TabkitException("Bad order format '%s'" % (field,))
+
 
 def parse_header(header_str):
     r'''
@@ -164,7 +171,7 @@ def generic_data_desc(desc1, desc2):
         fields.append((f1.name, generic_type(f1.type, f2.type)))
 
     order = []
-        
+
     return DataDesc(fields, order)
 
 

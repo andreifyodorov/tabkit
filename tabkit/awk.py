@@ -25,12 +25,12 @@ class AwkProgram(object):
 
         if self.output_cond:
             body += "if(%s){print %s;}" % (
-                "&&".join(self.output_cond), 
+                "&&".join(self.output_cond),
                 ",".join(self.output)
             )
         else:
             body += "print %s;" % (",".join(self.output),)
-            
+
         end = str()
         if self.end:
             end = "END{%s}" % (self.end,)
@@ -42,7 +42,7 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
     >>> from header import parse_header
     >>> data_desc = parse_header("# a, b, c, d")
     >>> awk, output_data_desc = map_program(
-    ...     data_desc, 
+    ...     data_desc,
     ...     output_exprs = ['a=b+c;b=a/c;_hidden=a*3;', 'new=_hidden/3', 'b=a+1', 'a', 'b', 'c', 'd'],
     ...     filter_exprs = ['new==a*d or new==d*a', '_hidden>=new']
     ... )
@@ -95,7 +95,7 @@ class AwkGenerator(ast.NodeVisitor):
         ast.Eq: '==',
         ast.NotEq: '!=',
         ast.Lt: '<',
-        ast.LtE: '<=', 
+        ast.LtE: '<=',
         ast.Gt: '>',
         ast.GtE: '>='
     }
@@ -122,7 +122,7 @@ class AwkGenerator(ast.NodeVisitor):
         op = self.compareops.get(type(node.ops[0]))
         if op is None:
             raise TabkitException("Syntax error: compare operation '%s' is not suported" % (node.ops[0].__class__.__name__,))
-            
+
         left_expr = self.visit(node.left)
         right_expr = self.visit(node.comparators[0])
         return Expr(
