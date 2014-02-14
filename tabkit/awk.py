@@ -210,7 +210,7 @@ class OutputAwkGenerator(AwkGenerator):
             # special case, no calculations, only output
             if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Name)):
                 field_name = stmt.value.id
-                if self.data_desc.has_field(field_name):
+                if field_name in self.data_desc:
                     if field_name not in self.context:
                         self.context[field_name] = Expr(
                             code = "$%d" % (self.data_desc.index(field_name) + 1,),

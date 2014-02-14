@@ -18,7 +18,7 @@ function run {
 ###### doctests
 (
     cd tabkit
-    ls *.py | xargs -n1 $xargs_extra_opts python
+    ls *.py | xargs -n1 $xargs_extra_opts python -mdoctest
 ) || failed doctests
 
 
