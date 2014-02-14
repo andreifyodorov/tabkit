@@ -16,6 +16,7 @@ class File(object):
     def __init__(self, fd):
         self.fd = fd
         self.name = fd.name
+
     def descriptor(self):
         return "/dev/fd/%d" % (self.fd.fileno(),)
 
@@ -23,6 +24,7 @@ class File(object):
 class RegularFile(File):
     def header(self):
         return self.fd.readline().rstrip()
+
     def descriptor(self):
         os.lseek(self.fd.fileno(), 0, os.SEEK_SET)
         return "<( tail -n+2 %s )" % (super(RegularFile, self).descriptor(),)
