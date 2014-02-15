@@ -58,7 +58,7 @@ def cut():
 
     elif args.remove:
         remove_fields = split_fields(args.remove)
-        [data_desc.index(field) for field in remove_fields] # check remove fields even exist
+        [data_desc.index(field) for field in remove_fields]  # check remove fields even exist
         fields = [name for name in data_desc.field_names if name not in remove_fields]
 
     field_indices = (data_desc.index(field) for field in fields)
@@ -72,8 +72,8 @@ def cut():
         order.append(order_key)
 
     data_desc = DataDesc(
-        fields = [(name, type) for name, type in data_desc.fields if name in fields],
-        order = order
+        fields=[(name, type) for name, type in data_desc.fields if name in fields],
+        order=order
     )
 
     if not args.no_header:
@@ -90,7 +90,8 @@ def map():
         description="Perform a map operation on the input"
     )
     parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
-    parser.add_argument('-a', '--all', action="store_true", help="Add all fields to output (implied without -o option)")
+    parser.add_argument('-a', '--all', action="store_true",
+                        help="Add all fields to output (implied without -o option)")
     parser.add_argument('-o', '--output', action="append", help="Output fields", default=[])
     parser.add_argument('-f', '--filter', action="append", help="Filter expression")
     add_common_args(parser)
@@ -126,7 +127,8 @@ def sort():
         description="Write sorted concatenation of all FILE(s) to standard output."
     )
     parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
-    parser.add_argument('-k', '--keys', action="append", default=[], help="List sorting keys as field[:(str|num|general)][:desc]")
+    parser.add_argument('-k', '--keys', action="append", default=[],
+                        help="List sorting keys as field[:(str|num|general)][:desc]")
     add_common_args(parser)
 
     args = parser.parse_args()

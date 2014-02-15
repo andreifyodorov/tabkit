@@ -1,11 +1,13 @@
 from exception import TabkitException
 
+
 TYPES = {
     'str': str,
     'float': float,
     'int': int,
     'bool': bool
 }
+
 
 def parse_type(type_str):
     if type_str:
@@ -15,6 +17,7 @@ def parse_type(type_str):
             raise TabkitException("Unknown type '%s'" % (type_str,))
     else:
         return None
+
 
 def generic_type(*types):
     if None in types:
@@ -27,6 +30,7 @@ def generic_type(*types):
         return int
     if bool in types:
         return bool
+
 
 def infer_type(op, *types):
     if op in ['+', '-', '*', '**']:
