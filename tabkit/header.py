@@ -5,7 +5,13 @@ from type import parse_type, generic_type
 from exception import TabkitException
 
 
-Field = namedtuple('Field', 'name type')
+class Field(namedtuple('Field', 'name type')):
+    def __str__(self):
+        if self.type == str:
+            return self.name
+        else:
+            return "%s:%s" % (self.name, self.type.__name__)
+
 
 ORDER_TYPES = {'str', 'num', 'generic'}
 
@@ -49,6 +55,9 @@ class DataDesc(object):
 
     def __contains__(self, field_name):
         return field_name in self.field_indices
+
+    def __iter__(self):
+        return iter(self.fields)
 
     def get_field(self, field_name):
         return self.fields[self.index(field_name)]
@@ -112,7 +121,7 @@ def parse_order(string):
 
 
 def parse_header(header_str):
-    r'''
+    R'''
     >>> str(parse_header('# a:int,   b:str foo # ORDER: a:num:desc b:num foo:desc'))
     '# a:int\tb\tfoo\t# ORDER: a:num:desc, b:num, foo:desc'
 
@@ -149,8 +158,7 @@ def parse_header(header_str):
 
 
 def make_header(desc):
-    header = "\t".join(
-        "%s:%s" % (f.name, f.type.__name__) if f.type != str else f.name for f in desc.fields)
+    header = "\t".join(map(str, desc))
     if desc.order:
         header += (
             "\t# ORDER: " +

@@ -2,14 +2,10 @@ import os
 import sys
 import subprocess
 from pipes import quote
-from itertools import izip
+from itertools import izip, chain
 
 from header import parse_header, generic_data_desc
 from exception import TabkitException
-
-
-def add_common_args(parser):
-    parser.add_argument("-N", "--no-header", help="Don't output header", action="store_true")
 
 
 class File(object):
@@ -54,6 +50,9 @@ class Files(object):
     def __init__(self, files=None):
         files = files or [sys.stdin]
         self.files = [file_obj(f) for f in files]
+
+    def __iter__(self):
+        return chain.from_iterable(f.fd for f in self.files)
 
     def data_desc(self):
         data_desc = None
@@ -100,11 +99,13 @@ def xsplit(s, delim="\t"):
 
 class parse_file(object):
     r'''
+    >>> from exception import test_exception
     >>> file = [
     ...     '# a:int, b:float, c',
     ...     '1',
     ...     '1\t2',
-    ...     '1\t2\t3\t4'
+    ...     '1\t2\t3\t4',
+    ...     'a'
     ... ]
 
     >>> p = parse_file(file)
@@ -121,32 +122,40 @@ class parse_file(object):
     >>> next(p)
     DataRow(a=1, b=2.0, c='3')
 
-    >>> from exception import test_exception
+    >>> test_exception(lambda: next(p))
+    doctest: Invalid literal for int() with base 10: 'a' at line 5
+
     >>> test_exception(lambda: list(parse_file(file, strict=True)))
-    doctest: Line 2 contains 1 columns, whereas 3 columns expected
+    doctest: Found 1 columns, whereas 3 columns expected at line 2
     '''
 
-    def __init__(self, stream, strict=False):
+    def __init__(self, stream, strict=False, data_desc=None):
         stream = iter(stream)
-        self.data_desc = parse_header(next(stream).rstrip())
+        self.data_desc = data_desc or parse_header(next(stream).rstrip())
 
         def parse():
             RowClass = self.data_desc.row_class()
             rowlen = len(self.data_desc)
-            for lineno, line in enumerate(stream):
-                raw = xsplit(line.rstrip("\n"))
-                values = [f.type(v) for v, f in izip(raw, self.data_desc.fields)]
-                if len(values) != rowlen:
-                    if strict:
-                        raise TabkitException(
-                            'Line %d contains %d columns, whereas %d columns expected' %
-                            (lineno + 2, len(values), rowlen)
-                        )
-                    if len(values) > rowlen:  # truncate if longer
-                        values = values[:rowlen]
-                    if len(values) < rowlen:  # pad if shorter
-                        values += [type() for name, type in self.data_desc.fields[len(values):]]
-                yield RowClass(*values)
+            try:
+                for lineno, line in enumerate(stream):
+                    raw = xsplit(line.rstrip("\n"))
+                    try:
+                        values = [f.type(v) for v, f in izip(raw, self.data_desc)]
+                    except ValueError as e:
+                        raise TabkitException(str(e).capitalize())
+                    if len(values) != rowlen:
+                        if strict:
+                            raise TabkitException(
+                                'Found %d columns, whereas %d columns expected' %
+                                (len(values), rowlen)
+                            )
+                        if len(values) > rowlen:  # truncate if longer
+                            values = values[:rowlen]
+                        if len(values) < rowlen:  # pad if shorter
+                            values += [f.type() for f in self.data_desc.fields[len(values):]]
+                    yield RowClass(*values)
+            except (TabkitException) as e:
+                raise TabkitException('%s at line %d' % (e, lineno + 2))
 
         self.iterator = parse()
 
@@ -202,16 +211,16 @@ class Writer(object):
             self._get_values = self._get_values_strict
 
     def _get_values_strict(self, kwargs):
-        for name, type in self.data_desc.fields:
-            if name not in kwargs:
-                raise TabkitException("Field %r required" % name)
-            value = kwargs.pop(name)
+        for field in self.data_desc:
+            if field.name not in kwargs:
+                raise TabkitException("Field %r required" % field.name)
+            value = kwargs.pop(field.name)
             try:
-                type(value)
+                field.type(value)
             except (TypeError, ValueError) as e:
                 raise TabkitException(
                     "Value convertable to type %s expected in field %r, but got %r" %
-                    (type.__name__, name, value))
+                    (field.type.__name__, field.name, value))
             yield _str(value)
 
     def _get_values(self, kwargs):

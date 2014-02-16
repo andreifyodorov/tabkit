@@ -1,10 +1,15 @@
 import sys
 import argparse
+from itertools import islice, izip, tee
 
 from awk import map_program
 from header import DataDesc, OrderField, parse_order
-from utils import Files, add_common_args
+from utils import Files, xsplit
 from exception import decorate_exceptions
+
+
+def add_common_args(parser):
+    parser.add_argument("-N", "--no-header", help="Don't output header", action="store_true")
 
 
 def split_fields(string):
@@ -21,9 +26,7 @@ def cat():
     add_common_args(parser)
 
     args = parser.parse_args()
-
     files = Files(args.files)
-
     data_desc = files.data_desc()
 
     if not args.no_header:
@@ -45,12 +48,10 @@ def cut():
     add_common_args(parser)
 
     args = parser.parse_args()
-
     if not (args.fields or args.remove):
         TabkitException("You must specify list of fields")
 
     files = Files(args.files)
-
     data_desc = files.data_desc()
 
     if args.fields:
@@ -72,7 +73,7 @@ def cut():
         order.append(order_key)
 
     data_desc = DataDesc(
-        fields=[(name, type) for name, type in data_desc.fields if name in fields],
+        fields=[f for f in data_desc if f.name in fields],
         order=order
     )
 
@@ -97,13 +98,11 @@ def map():
     add_common_args(parser)
 
     args = parser.parse_args()
-
     files = Files(args.files)
-
     data_desc = files.data_desc()
 
     if args.all or not args.output:
-        args.output.extend(f.name for f in data_desc.fields)
+        args.output.extend(f.name for f in data_desc)
 
     program, data_desc = map_program(data_desc, args.output, args.filter)
 
@@ -132,9 +131,7 @@ def sort():
     add_common_args(parser)
 
     args = parser.parse_args()
-
     files = Files(args.files)
-
     data_desc = files.data_desc()
 
     order = list(make_order(args.keys or data_desc.field_names))
@@ -158,6 +155,34 @@ def sort():
         sys.stdout.flush()
 
     files.call(['sort'] + options)
+
+
+@decorate_exceptions
+def pretty():
+    parser = argparse.ArgumentParser(
+        add_help=True,
+        description="Output FILE(s) as human-readable pretty table."
+    )
+    parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
+    parser.add_argument('-n', default=100, 
+        help="Preread N rows to calculate column widths, default is 100") 
+
+    args = parser.parse_args()
+    files = Files(args.files)
+    data_desc = files.data_desc()
+    preread, rows = tee((row.rstrip("\n") for row in files), 2)
+
+    # gather column widths
+    widths = [len(str(f)) for f in data_desc]
+    for row in islice(preread, args.n):
+        for i, value in enumerate(xsplit(row)):
+            widths[i] = max(widths[i], len(value))
+
+    widths = [w + 2 for w in widths]
+    print "|".join((" %s " % (f,)).ljust(w) for w, f in izip(widths, data_desc))
+    print "+".join("-"*w for w in widths)
+    for row in rows:
+        print "|".join((" %s " % v).ljust(w) for w, v in izip(widths, xsplit(row)))
 
 
 if __name__ == "__main__":

@@ -225,3 +225,16 @@ diff -b <(
 .2e4
 .1e5
 EOCASE) || failed sort_generic
+
+
+###### tpretty
+
+# pretty
+diff -b <(
+    echo -e "# a:int, b\n1\t12123123\n3\t2" | python -mtabkit.scripts pretty
+) <( cat <<EOCASE
+ a:int | b
+-------+----------
+ 1     | 12123123
+ 3     | 2
+EOCASE) || failed pretty    
