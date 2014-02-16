@@ -111,7 +111,7 @@ trap - EXIT
 diff -b <(
     echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | run cut -f a,c
 ) <(cat <<EOCASE
-# a:int c:str
+# a:int c
 1   a
 2   b
 EOCASE) || failed cut_keep
@@ -177,7 +177,7 @@ EOCASE) || failed map_int
 diff -b <(
     echo -e "# a, b\n1\ta'\n2\t\"b\n3\tc" | run map -o "x=sprintf('%.02f,%s', a, b)"
 ) <(
-    echo '# x:str'
+    echo '# x'
     echo "1.00,a'"
     echo '2.00,"b'
     echo '3.00,c'

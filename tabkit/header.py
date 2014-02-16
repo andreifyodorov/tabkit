@@ -114,7 +114,7 @@ def parse_order(string):
 def parse_header(header_str):
     r'''
     >>> str(parse_header('# a:int,   b:str foo # ORDER: a:num:desc b:num foo:desc'))
-    '# a:int\tb:str\tfoo\t# ORDER: a:num:desc, b:num, foo:desc'
+    '# a:int\tb\tfoo\t# ORDER: a:num:desc, b:num, foo:desc'
 
     >>> from exception import test_exception
 
@@ -150,7 +150,7 @@ def parse_header(header_str):
 
 def make_header(desc):
     header = "\t".join(
-        "%s:%s" % (f.name, f.type.__name__) if f.type else f.name for f in desc.fields)
+        "%s:%s" % (f.name, f.type.__name__) if f.type != str else f.name for f in desc.fields)
     if desc.order:
         header += (
             "\t# ORDER: " +
