@@ -101,29 +101,29 @@ def xsplit(s, delim="\t"):
 class parse_file(object):
     r'''
     >>> file = [
-    ...     '# a:int, b:float',
+    ...     '# a:int, b:float, c',
     ...     '1',
     ...     '1\t2',
-    ...     '1\t2\t3'
+    ...     '1\t2\t3\t4'
     ... ]
 
     >>> p = parse_file(file)
 
     >>> str(p.data_desc)
-    '# a:int\tb:float'
+    '# a:int\tb:float\tc'
 
     >>> next(p)
-    DataRow(a=1, b=0.0)
+    DataRow(a=1, b=0.0, c='')
 
     >>> next(p)
-    DataRow(a=1, b=2.0)
+    DataRow(a=1, b=2.0, c='')
 
     >>> next(p)
-    DataRow(a=1, b=2.0)
+    DataRow(a=1, b=2.0, c='3')
 
     >>> from exception import test_exception
     >>> test_exception(lambda: list(parse_file(file, strict=True)))
-    doctest: Line 2 contains 1 columns, whereas 2 columns expected
+    doctest: Line 2 contains 1 columns, whereas 3 columns expected
     '''
 
     def __init__(self, stream, strict=False):
@@ -135,7 +135,7 @@ class parse_file(object):
             rowlen = len(self.data_desc)
             for lineno, line in enumerate(stream):
                 raw = xsplit(line.rstrip("\n"))
-                values = [type(v) for v, (name, type) in izip(raw, self.data_desc.fields)]
+                values = [f.type(v) for v, f in izip(raw, self.data_desc.fields)]
                 if len(values) != rowlen:
                     if strict:
                         raise TabkitException(
@@ -174,7 +174,7 @@ class Writer(object):
     >>> write(a=1, b="banana", x=False)
     >>> write(b=10, x='True')
     >>> print write.fh.getvalue() # doctest: +NORMALIZE_WHITESPACE
-    # a:int b:str   x:bool
+    # a:int b       x:bool
       1     banana  0
             10      True
 
@@ -190,7 +190,7 @@ class Writer(object):
 
     >>> write(a="1", b="banana", x=0)
     >>> print write.fh.getvalue() # doctest: +NORMALIZE_WHITESPACE
-    # a:int b:str   x:bool
+    # a:int b       x:bool
       1     banana  0
     '''
 
