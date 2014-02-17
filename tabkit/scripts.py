@@ -1,6 +1,6 @@
 import sys
 import argparse
-from itertools import islice, izip, tee
+from itertools import islice, izip, izip_longest, tee
 
 from awk import map_program
 from header import DataDesc, OrderField, parse_order
@@ -164,25 +164,31 @@ def pretty():
         description="Output FILE(s) as human-readable pretty table."
     )
     parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
-    parser.add_argument('-n', default=100, 
-        help="Preread N rows to calculate column widths, default is 100") 
+    parser.add_argument('-n', default=100,
+                        help="Preread N rows to calculate column widths, default is 100")
 
     args = parser.parse_args()
     files = Files(args.files)
     data_desc = files.data_desc()
     preread, rows = tee((row.rstrip("\n") for row in files), 2)
 
+    nfields = len(data_desc)
+    split = lambda row: islice(xsplit(row), nfields)
+
     # gather column widths
     widths = [len(str(f)) for f in data_desc]
     for row in islice(preread, args.n):
-        for i, value in enumerate(xsplit(row)):
+        for i, value in enumerate(split(row)):
             widths[i] = max(widths[i], len(value))
 
     widths = [w + 2 for w in widths]
     print "|".join((" %s " % (f,)).ljust(w) for w, f in izip(widths, data_desc))
-    print "+".join("-"*w for w in widths)
+    print "+".join("-" * w for w in widths)
     for row in rows:
-        print "|".join((" %s " % v).ljust(w) for w, v in izip(widths, xsplit(row)))
+        print "|".join(
+            (" %s " % (v or '')).ljust(w or 0)
+            for w, v in izip_longest(widths, split(row))
+        )
 
 
 if __name__ == "__main__":
