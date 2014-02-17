@@ -231,10 +231,12 @@ EOCASE) || failed sort_generic
 
 # pretty
 diff -b <(
-    echo -e "# a:int, b\n1\t12123123\n3\t2" | python -mtabkit.scripts pretty
+    echo -e "# a:int, b\n1\t12123123\t1\n3\t2\n\na" | python -mtabkit.scripts pretty
 ) <( cat <<EOCASE
  a:int | b
 -------+----------
  1     | 12123123
  3     | 2
-EOCASE) || failed pretty    
+       |
+ a     |
+EOCASE) || failed pretty
