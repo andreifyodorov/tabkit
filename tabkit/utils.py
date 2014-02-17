@@ -157,13 +157,13 @@ class parse_file(object):
             except (TabkitException) as e:
                 raise TabkitException('%s at line %d' % (e, lineno + 2))
 
-        self.iterator = parse()
+        self._iterator = parse()
 
     def __iter__(self):
-        return self.iterator
+        return self
 
     def next(self):
-        return next(self.iterator)
+        return next(self._iterator)
 
 
 def _str(value):  # dump True/False as 1/0 for lapidarity reasons
@@ -171,26 +171,31 @@ def _str(value):  # dump True/False as 1/0 for lapidarity reasons
         return '1'
     if value is False:
         return '0'
+    if value is None:
+        return ''
     return str(value)
 
 
-class Writer(object):
+def Writer(fh, data_desc, strict=False):
+    if strict:
+        return StrictWriter(fh, data_desc)
+    else:
+        return LooseWriter(fh, data_desc)
+
+
+class WriterBase(object):
+    def __init__(self, fh, data_desc):
+        self.fh = fh
+        self.data_desc = data_desc
+        self.fh.write(str(data_desc) + "\n")
+
+
+class StrictWriter(WriterBase):
     r'''
     >>> from StringIO import StringIO
     >>> from exception import test_exception
 
-    >>> write = Writer(StringIO(), parse_header("# a:int, b:str, x:bool"))
-    >>> write(a=1, b="banana", x=False)
-    >>> write(b=10, x='True')
-    >>> print write.fh.getvalue() # doctest: +NORMALIZE_WHITESPACE
-    # a:int b       x:bool
-      1     banana  0
-            10      True
-
-    >>> test_exception(lambda: write(a='0', b=10, c='True'))
-    doctest: Unexpected field 'c'
-
-    >>> write = Writer(StringIO(), parse_header("# a:int, b:str, x:bool"), strict=True)
+    >>> write = StrictWriter(StringIO(), parse_header("# a:int, b:str, x:bool"))
     >>> test_exception(lambda: write(b=10, x='True'))
     doctest: Field 'a' required
 
@@ -202,15 +207,7 @@ class Writer(object):
     # a:int b       x:bool
       1     banana  0
     '''
-
-    def __init__(self, fh, data_desc, strict=False):
-        self.fh = fh
-        self.data_desc = data_desc
-        self.fh.write(str(data_desc) + "\n")
-        if strict:
-            self._get_values = self._get_values_strict
-
-    def _get_values_strict(self, kwargs):
+    def _get_values(self, kwargs):
         for field in self.data_desc:
             if field.name not in kwargs:
                 raise TabkitException("Field %r required" % field.name)
@@ -223,11 +220,31 @@ class Writer(object):
                     (field.type.__name__, field.name, value))
             yield _str(value)
 
+    def __call__(self, **kwargs):
+        self.fh.write("%s\n" % "\t".join(self._get_values(kwargs)))
+        if kwargs:
+            raise TabkitException('Unexpected field %r' % kwargs.keys().pop())
+
+
+class LooseWriter(WriterBase):
+    r'''
+    >>> from StringIO import StringIO
+    >>> from exception import test_exception
+
+    >>> write = LooseWriter(StringIO(), parse_header("# a:int, b:str, x:bool"))
+    >>> write(a=1, b="banana", x=False)
+    >>> write(b=10, x='True')
+    >>> print write.fh.getvalue() # doctest: +NORMALIZE_WHITESPACE
+    # a:int b       x:bool
+      1     banana  0
+            10      True
+
+    >>> test_exception(lambda: write(c='True'))
+    '''
+
     def _get_values(self, kwargs):
         for name in self.data_desc.field_names:
             yield _str(kwargs.pop(name, ''))
 
     def __call__(self, **kwargs):
         self.fh.write("%s\n" % "\t".join(self._get_values(kwargs)))
-        if kwargs:
-            raise TabkitException('Unexpected field %r' % kwargs.keys().pop())
