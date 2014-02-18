@@ -5,9 +5,15 @@ from type import parse_type, generic_type
 from exception import TabkitException
 
 
-Field = namedtuple('Field', 'name type')
+class Field(namedtuple('Field', 'name type')):
+    def __str__(self):
+        if self.type == str:
+            return self.name
+        else:
+            return "%s:%s" % (self.name, self.type.__name__)
 
-ORDER_TYPES = set(['str', 'num', 'generic'])
+
+ORDER_TYPES = {'str', 'num', 'generic'}
 
 
 class OrderField(object):
@@ -15,8 +21,12 @@ class OrderField(object):
         self.name = name
         self.type = type or 'str'
         self.desc = desc
+
     def __repr__(self):
-        return "<%s.%s: %s, %s, %s>" % (__name__, self.__class__.__name__, self.name, self.type, self.desc)
+        return (
+            "<%s.%s: %s, %s, %s>" %
+            (__name__, self.__class__.__name__, self.name, self.type, self.desc)
+        )
 
 
 class DataDesc(object):
@@ -25,10 +35,14 @@ class DataDesc(object):
         self.field_names = [f.name for f in self.fields]
         self.field_indices = dict((f.name, index) for index, f in enumerate(self.fields))
 
+        for index, name in enumerate(self.field_names):
+            if self.index(name) != index:
+                raise TabkitException("Duplicate field '%s'" % name)
+
         if order:
             for f in order:
-                if not self.has_field(f.name):
-                    raise TabkitException("Unknown order field '%s'" % (f.name,))
+                if f.name not in self:
+                    raise TabkitException("Unknown order field '%s'" % f.name)
             self.order = order
         else:
             self.order = []
@@ -36,17 +50,26 @@ class DataDesc(object):
     def __str__(self):
         return make_header(self)
 
-    def has_field(self, field_name):
-        return self.field_indices.has_key(field_name)
+    def __len__(self):
+        return len(self.fields)
+
+    def __contains__(self, field_name):
+        return field_name in self.field_indices
+
+    def __iter__(self):
+        return iter(self.fields)
 
     def get_field(self, field_name):
         return self.fields[self.index(field_name)]
 
     def index(self, field_name):
-        if self.has_field(field_name):
+        if field_name in self:
             return self.field_indices[field_name]
         else:
-            raise TabkitException("No such field '%s'" % (field_name,))
+            raise TabkitException("No such field '%s'" % field_name)
+
+    def row_class(self):
+        return namedtuple('DataRow', self.field_names)
 
 
 def split_fields(string):
@@ -62,15 +85,16 @@ def parse_order(string):
     >>> list(parse_order("a b"))
     [('a', None, False), ('b', None, False)]
 
-    >>> from sys import stdout
-    >>> from exception import handle_exceptions
+    >>> from exception import test_exception
 
-    >>> handle_exceptions(lambda: list(parse_order("a:desc:desc")), stderr=stdout)
-    header.py: Bad order format 'a:desc:desc'
-    >>> handle_exceptions(lambda: list(parse_order("a:str:str")), stderr=stdout)
-    header.py: Bad order format 'a:str:str'
-    >>> handle_exceptions(lambda: list(parse_order("a:desc:str")), stderr=stdout)
-    header.py: Bad order format 'a:desc:str'
+    >>> test_exception(lambda: parse_order("a:desc:desc"))
+    doctest: Bad order format 'a:desc:desc'
+
+    >>> test_exception(lambda: parse_order("a:str:str"))
+    doctest: Bad order format 'a:str:str'
+
+    >>> test_exception(lambda: parse_order("a:desc:str"))
+    doctest: Bad order format 'a:desc:str'
     '''
     for field in re.findall('[^,\s]+', string):
         parts = field.split(':', 2)
@@ -93,21 +117,24 @@ def parse_order(string):
                     raise ValueError
             yield (order_name, order_type, order_desc)
         except ValueError:
-            raise TabkitException("Bad order format '%s'" % (field,))
+            raise TabkitException("Bad order format '%s'" % field)
 
 
 def parse_header(header_str):
-    r'''
+    R'''
     >>> str(parse_header('# a:int,   b:str foo # ORDER: a:num:desc b:num foo:desc'))
-    '# a:int\tb:str\tfoo\t# ORDER: a:num:desc, b:num, foo:desc'
+    '# a:int\tb\tfoo\t# ORDER: a:num:desc, b:num, foo:desc'
 
-    >>> from sys import stdout
-    >>> from exception import handle_exceptions
+    >>> from exception import test_exception
 
-    >>> handle_exceptions(lambda: parse_header('#'), stderr=stdout)
-    header.py: Bad header
-    >>> handle_exceptions(lambda: parse_header('# a:int # ORDER: b'), stderr=stdout)
-    header.py: Unknown order field 'b'
+    >>> test_exception(lambda: parse_header('#'))
+    doctest: Bad header
+
+    >>> test_exception(lambda: parse_header('# a:int # ORDER: b'))
+    doctest: Unknown order field 'b'
+
+    >>> test_exception(lambda: parse_header('# a:int, a:str'))
+    doctest: Duplicate field 'a'
     '''
     if header_str[0] != "#":
         raise TabkitException("Bad header")
@@ -116,7 +143,8 @@ def parse_header(header_str):
 
     order_index = header_str.find("# ORDER:")
     if order_index >= 0:
-        header_str, order_str = (header_str[:order_index - 1], header_str[order_index + len("# ORDER:"):])
+        header_str, order_str = (
+            header_str[:order_index - 1], header_str[order_index + len("# ORDER:"):])
         order = [OrderField(name, type, desc) for name, type, desc in parse_order(order_str)]
     else:
         order = None
@@ -130,7 +158,7 @@ def parse_header(header_str):
 
 
 def make_header(desc):
-    header = "\t".join("%s:%s" % (f.name, f.type.__name__) if f.type else f.name for f in desc.fields)
+    header = "\t".join(map(str, desc))
     if desc.order:
         header += (
             "\t# ORDER: " +
@@ -153,12 +181,11 @@ def generic_data_desc(desc1, desc2):
     >>> str(generic_data_desc(d1, d2))
     '# a:float\tb'
 
-    >>> from sys import stdout
-    >>> from exception import handle_exceptions
+    >>> from exception import test_exception
 
     >>> d3 = parse_header("# a:str, b:bool, c:int")
-    >>> handle_exceptions(lambda: generic_data_desc(d1, d3), stderr=stdout)
-    header.py: Incompatible headers
+    >>> test_exception(lambda: generic_data_desc(d1, d3))
+    doctest: Incompatible headers
     '''
     if len(desc1.fields) != len(desc2.fields):
         raise TabkitException("Incompatible headers")
@@ -173,8 +200,3 @@ def generic_data_desc(desc1, desc2):
     order = []
 
     return DataDesc(fields, order)
-
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod(raise_on_error=True)

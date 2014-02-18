@@ -18,7 +18,7 @@ function run {
 ###### doctests
 (
     cd tabkit
-    ls *.py | xargs -n1 $xargs_extra_opts python
+    ls *.py | xargs -n1 $xargs_extra_opts python -mdoctest
 ) || failed doctests
 
 
@@ -111,7 +111,7 @@ trap - EXIT
 diff -b <(
     echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | run cut -f a,c
 ) <(cat <<EOCASE
-# a:int c:str
+# a:int c
 1   a
 2   b
 EOCASE) || failed cut_keep
@@ -177,7 +177,7 @@ EOCASE) || failed map_int
 diff -b <(
     echo -e "# a, b\n1\ta'\n2\t\"b\n3\tc" | run map -o "x=sprintf('%.02f,%s', a, b)"
 ) <(
-    echo '# x:str'
+    echo '# x'
     echo "1.00,a'"
     echo '2.00,"b'
     echo '3.00,c'
@@ -225,3 +225,18 @@ diff -b <(
 .2e4
 .1e5
 EOCASE) || failed sort_generic
+
+
+###### tpretty
+
+# pretty
+diff -b <(
+    echo -e "# a:int, b\n1\t12123123\t1\n3\t2\n\na" | python -mtabkit.scripts pretty
+) <( cat <<EOCASE
+ a:int | b
+-------+----------
+ 1     | 12123123
+ 3     | 2
+       |
+ a     |
+EOCASE) || failed pretty
