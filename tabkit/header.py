@@ -17,9 +17,9 @@ ORDER_TYPES = {'str', 'num', 'generic'}
 
 
 class OrderField(object):
-    def __init__(self, name, type=None, desc=None):
+    def __init__(self, name, type_=None, desc=None):
         self.name = name
-        self.type = type or 'str'
+        self.type = type_ or 'str'
         self.desc = desc
 
     def __repr__(self):
@@ -34,7 +34,7 @@ class OrderField(object):
 
 class DataDesc(object):
     def __init__(self, fields, order=None):
-        self.fields = [Field(name, type) for name, type in fields]
+        self.fields = [Field(name, type_) for name, type_ in fields]
         self.field_names = [f.name for f in self.fields]
         self.field_indices = dict((f.name, index) for index, f in enumerate(self.fields))
 
@@ -150,11 +150,11 @@ def parse_header(header_str):
     if order_index >= 0:
         header_str, order_str = (
             header_str[:order_index - 1], header_str[order_index + len("# ORDER:"):])
-        order = [OrderField(name, type, desc) for name, type, desc in parse_order(order_str)]
+        order = [OrderField(name, type_, desc) for name, type_, desc in parse_order(order_str)]
     else:
         order = None
 
-    fields = [(name, parse_type(type)) for name, type in split_fields(header_str)]
+    fields = [(name, parse_type(type_)) for name, type_ in split_fields(header_str)]
 
     if len(fields) == 0:
         raise TabkitException("Bad header")
