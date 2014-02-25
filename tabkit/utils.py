@@ -16,6 +16,9 @@ class File(object):
     def descriptor(self):
         return "/dev/fd/%d" % (self.fd.fileno(),)
 
+    def data_desc(self):
+        return parse_header(self.header())
+
 
 class RegularFile(File):
     def header(self):
@@ -54,11 +57,18 @@ class Files(object):
     def __iter__(self):
         return chain.from_iterable(f.fd for f in self.files)
 
+    def data_descs(self):
+        for f in self.files:
+            try:
+                yield f.data_desc()
+            except TabkitException as e:
+                raise TabkitException("%s in file '%s'" % (e, f.name))
+
     def data_desc(self):
         data_desc = None
         for f in self.files:
             try:
-                this_data_desc = parse_header(f.header())
+                this_data_desc = f.data_desc()
                 if data_desc:
                     # for more than two files being cated together order is meaningless
                     this_data_desc.order = None

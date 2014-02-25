@@ -17,15 +17,15 @@ def parse_type(type_str):
         raise TabkitException("Unknown type '%s'" % type_str)
 
 
+type_hierarchy = (str, float, int, bool)
+
+
 def generic_type(*types):
-    if str in types:
-        return str
-    if float in types:
-        return float
-    if int in types:
-        return int
-    if bool in types:
-        return bool
+    return next(t for t in type_hierarchy if t in types)
+
+
+def narrowest_type(*types):
+    return next(t for t in reversed(type_hierarchy) if t in types)
 
 
 def infer_type(op, *types):

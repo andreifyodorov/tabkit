@@ -28,6 +28,9 @@ class OrderField(object):
             (__name__, self.__class__.__name__, self.name, self.type, self.desc)
         )
 
+    def __iter__(self):
+        return iter((self.name, self.type, self.desc))
+
 
 class DataDesc(object):
     def __init__(self, fields, order=None):
@@ -53,8 +56,10 @@ class DataDesc(object):
     def __len__(self):
         return len(self.fields)
 
-    def __contains__(self, field_name):
-        return field_name in self.field_indices
+    def __contains__(self, field):
+        if isinstance(field, Field):
+            return field.name in self.field_indices
+        return field in self.field_indices
 
     def __iter__(self):
         return iter(self.fields)

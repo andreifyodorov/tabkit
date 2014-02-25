@@ -1,11 +1,12 @@
 import sys
 import argparse
-from itertools import islice, izip, izip_longest, tee
+from itertools import islice, izip, izip_longest, tee, chain
 
 from awk import map_program
-from header import DataDesc, OrderField, parse_order
+from header import Field, DataDesc, OrderField, parse_order
+from exception import TabkitException, decorate_exceptions
+from type import narrowest_type
 from utils import Files, xsplit
-from exception import decorate_exceptions
 
 
 def add_common_args(parser):
@@ -155,6 +156,152 @@ def sort():
         sys.stdout.flush()
 
     files.call(['sort'] + options)
+
+
+class add_set(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string):
+        dest = getattr(namespace, self.dest)
+        if not dest:
+            setattr(namespace, self.dest, {values})
+        else:
+            dest.add(values)
+            setattr(namespace, self.dest, dest)
+
+
+@decorate_exceptions
+def join():
+    parser = argparse.ArgumentParser(
+        add_help=True,
+        description="Perform the join operation on LEFT_FILE and RIGHT_FILE "
+                    "and write result to standard output."
+    )
+    parser.add_argument('left', metavar='LEFT_FILE', type=argparse.FileType('r'))
+    parser.add_argument('right', metavar='RIGHT_FILE', type=argparse.FileType('r'))
+    parser.add_argument('-j', '--join-key', metavar="FIELD",
+                        help="Join on the FIELD of both LEFT_FILE and RIGHT_FILE")
+    parser.add_argument('-1', '--left-key', metavar="FIELD",
+                        help="Join on the FIELD of LEFT_FILE")
+    parser.add_argument('-2', '--right-key', metavar="FIELD",
+                        help="Join on the FIELD of RIGHT_FILE")
+    parser.add_argument('-a', '--add-unpairable',
+                        metavar="FILENO", type=int, default=set(), choices={1, 2}, action=add_set,
+                        help="Add unpairable lines from FILENO")
+    parser.add_argument('-v', '--only-unpairable',
+                        metavar="FILENO", type=int, default=set(), choices={1, 2}, action=add_set,
+                        help="Suppress all but unpairable lines from FILENO")
+    parser.add_argument('-e', '--empty', metavar="NULL",
+                        help="Fill unpairable fields with NULL (default is empty string)")
+    parser.add_argument('-o', '--output', metavar="[FILENO.]FIELD",
+                        help="Specify output fields (might be comma-separated)")
+    add_common_args(parser)
+    args = parser.parse_args()
+
+    left, right = args.left, args.right
+    files = Files([left, right])
+    left_desc, right_desc = list(files.data_descs())
+
+    if not (args.join_key or (args.left_key and args.right_key)):
+        raise TabkitException('Specify join field through -j or -1, -2 options')
+    left_key = right_key = args.join_key
+    if args.left_key:
+        left_key = args.left_key
+    if args.right_key:
+        right_key = args.right_key
+
+    if args.add_unpairable and args.only_unpairable:
+        raise TabkitException(
+            "-a does nothing in presence of -v. Are you sure about what you're trying to express?")
+
+    output = []
+    output_desc = []
+    output_order = []
+    generic_key = None
+    if not args.only_unpairable or len(args.only_unpairable) == 2:
+        generic_key = Field(
+            left_key,
+            narrowest_type(
+                left_desc.get_field(left_key).type,
+                right_desc.get_field(right_key).type)
+        )
+
+    for fileno, file, key, desc in ((1, left, left_key, left_desc),
+                                    (2, right, right_key, right_desc)):
+        if key not in desc:
+            raise TabkitException("No such field %r in file %r" % (key, file.name))
+        try:
+            field, field_type, order = desc.order.pop(0)  # remove it
+            if not (field == key and field_type == "str" and not order):
+                raise ValueError
+        except (IndexError, ValueError):
+            raise TabkitException(
+                "File %r must be sorted lexicographicaly ascending by the field %r" %
+                (file.name, key))
+        if not args.output:
+            if args.only_unpairable and not fileno in args.only_unpairable:
+                continue
+            for fieldno, field in enumerate(desc, start=1):
+                if field.name == key and generic_key:
+                    if file == left:
+                        output.append("0")
+                        output_desc.append(generic_key)
+                        output_order.append(OrderField(field.name))
+                    continue
+
+                output.append("%d.%d" % (fileno, fieldno))
+                if field in output_desc:
+                    raise TabkitException(
+                        "Duplicate field %r in file %r" % (field.name, file.name))
+                output_desc.append(field)
+
+    if args.output:
+        for field in split_fields(args.output):
+            if '.' in field:
+                fileno, field_name = field.split('.', 1)
+                try:
+                    fileno = int(fileno)
+                    if fileno not in [1, 2]:
+                        raise ValueError
+                except ValueError:
+                    raise TabkitException('Bad output field format %r' % field)
+                desc = (left_desc, right_desc)[fileno - 1]
+                if field_name not in desc:
+                    raise TabkitException('Unknown output field %r' % field)
+                output.append("%d.%d" % (fileno, desc.index(field_name) + 1))
+                output_desc.append(desc.get_field(field_name))
+            else:
+                if generic_key and field == generic_key.name:
+                    output.append("0")
+                    output_desc.append(generic_key)
+                else:
+                    if field in left_desc and field in right_desc:
+                        raise TabkitException('Output field %r is ambiguous' % field)
+                    if field in left_desc:
+                        pass
+                    elif field in right_desc:
+                        pass
+                    else:
+                        raise TabkitException('Unknown output field %r' % field)
+
+    output_field_names = {f.name for f in output_desc}
+    output_order.extend(
+        f for f in chain(left_desc.order, right_desc.order) if f.name in output_field_names)
+    output_desc = DataDesc(output_desc, output_order)
+
+    options = ['-1', str(left_desc.index(left_key) + 1),
+               '-2', str(right_desc.index(right_key) + 1)]
+    for fileno in args.add_unpairable:
+        options.extend(['-a', str(fileno)])
+    for fileno in args.only_unpairable:
+        options.extend(['-v', str(fileno)])
+    if args.empty:
+        options.extend(['-e', args.empty])
+    options.extend(['-o', ','.join(output)])
+
+    if not args.no_header:
+        sys.stdout.write(str(output_desc) + "\n")
+        sys.stdout.flush()
+
+    files.call(['join', '-t', "\t"] + options)
 
 
 @decorate_exceptions
