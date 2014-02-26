@@ -5,7 +5,7 @@ from itertools import islice, izip, izip_longest, tee, chain
 from awk import map_program
 from header import Field, DataDesc, OrderField, parse_order
 from exception import TabkitException, decorate_exceptions
-from type import narrowest_type
+from type import generic_type, narrowest_type
 from utils import Files, xsplit
 
 
@@ -191,8 +191,9 @@ def join():
                         help="Suppress all but unpairable lines from FILENO")
     parser.add_argument('-e', '--empty', metavar="NULL",
                         help="Fill unpairable fields with NULL (default is empty string)")
-    parser.add_argument('-o', '--output', metavar="[FILENO.]FIELD",
-                        help="Specify output fields (might be comma-separated)")
+    # square brackets in metavare cause assertion error http://bugs.python.org/issue11874
+    parser.add_argument('-o', '--output', metavar="FILENO.FIELD, ...",
+                        help="Specify output fields. FILENO is optional if FIELD is unambiguous.")
     add_common_args(parser)
     args = parser.parse_args()
 
@@ -217,12 +218,21 @@ def join():
     output_order = []
     generic_key = None
     if not args.only_unpairable or len(args.only_unpairable) == 2:
-        generic_key = Field(
-            left_key,
-            narrowest_type(
-                left_desc.get_field(left_key).type,
-                right_desc.get_field(right_key).type)
-        )
+        if args.add_unpairable == {1}:
+            # all keys from left table
+            type_ = left_desc.get_field(left_key).type
+        elif args.add_unpairable == {2}:
+            # all keys from right table
+            type_ = right_desc.get_field(right_key).type
+        elif args.add_unpairable or args.only_unpairable:
+            # all keys from both tables
+            type_ = generic_type(left_desc.get_field(left_key).type,
+                                 right_desc.get_field(right_key).type)
+        else:
+            # matching keys from both tables
+            type_ = narrowest_type(left_desc.get_field(left_key).type,
+                                   right_desc.get_field(right_key).type)
+        generic_key = Field(left_key, type_)
 
     for fileno, file, key, desc in ((1, left, left_key, left_desc),
                                     (2, right, right_key, right_desc)):
@@ -240,12 +250,15 @@ def join():
             if args.only_unpairable and not fileno in args.only_unpairable:
                 continue
             for fieldno, field in enumerate(desc, start=1):
-                if field.name == key and generic_key:
-                    if file == left:
-                        output.append("0")
-                        output_desc.append(generic_key)
+                if field.name == key:
+                    if generic_key:
+                        if file == left:
+                            output.append("0")
+                            output_desc.append(generic_key)
+                            output_order.append(OrderField(field.name))
+                        continue
+                    elif fileno in args.only_unpairable:
                         output_order.append(OrderField(field.name))
-                    continue
 
                 output.append("%d.%d" % (fileno, fieldno))
                 if field in output_desc:
