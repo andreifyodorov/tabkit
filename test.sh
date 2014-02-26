@@ -240,3 +240,107 @@ diff -b <(
        |
  a     |
 EOCASE) || failed pretty
+
+
+###### tjoin
+
+# join_unsorted
+diff -b <(
+    python -mtabkit.scripts join -j id <(
+        echo -e "# id:int # ORDER: id"
+    ) <(
+        echo -e "# id:str"
+    ) 2>&1
+) <( cat <<EOCASE
+join: File '/dev/fd/62' must be sorted lexicographicaly ascending by the field 'id'
+EOCASE) || failed join_unsorted
+
+# join_generic_key
+diff -b <(
+    python -mtabkit.scripts join -j id <(
+        echo -e "# id:int # ORDER:id\n1\n2\n3\n"
+    ) <(
+        echo -e "# id # ORDER:id\n3\nfoo\n"
+    )
+) <( cat <<EOCASE
+# id:int    # ORDER: id
+3
+EOCASE) || failed join_generic_key
+
+# join
+diff -b <(
+    python -mtabkit.scripts join -1 id -2 ID <(
+        echo -e "# id:int, fruit # ORDER: id, fruit\n1\tapple\n1\tpomegranate\n2\torange\n3\tcucumber"
+    ) <(
+        echo -e "# ID, color # ORDER: ID, color\n1\tred\n1\truby\n3\tgreen\nfoo\tpurple"
+    )
+) <( cat <<EOCASE
+# id:int    fruit   color # ORDER: id, fruit, color
+1   apple       red
+1   apple       ruby
+1   pomegranate red
+1   pomegranate ruby
+3   cucumber    green
+EOCASE) || failed join
+
+# join_a
+diff -b <(
+    python -mtabkit.scripts join -1 id -2 ID -a2 -e- <(
+        echo -e "# id:float, fruit # ORDER: id, fruit\n1\tapple\n1\tpomegranate\n1.5\torange\n3\tcucumber"
+    ) <(
+        echo -e "# ID:int, color # ORDER: ID, color\n1\tred\n1\truby\n3\tgreen\n4\tpurple"
+    )
+) <( cat <<EOCASE
+# id:int    fruit   color # ORDER: id, fruit, color
+1   apple       red
+1   apple       ruby
+1   pomegranate red
+1   pomegranate ruby
+3   cucumber    green
+4   -           purple
+EOCASE) || failed join_a
+
+# join_a_generic_key
+diff -b <(
+    python -mtabkit.scripts join -1 id -2 ID -a1 -a2 -e- <(
+        echo -e "# id:float, fruit # ORDER: id, fruit\n1\tapple\n1\tpomegranate\n1.5\torange\n3\tcucumber"
+    ) <(
+        echo -e "# ID:int, color # ORDER: ID, color\n1\tred\n1\truby\n3\tgreen\n4\tpurple"
+    )
+) <( cat <<EOCASE
+# id:float    fruit   color # ORDER: id, fruit, color
+1   apple       red
+1   apple       ruby
+1   pomegranate red
+1   pomegranate ruby
+1.5 orange      -
+3   cucumber    green
+4   -           purple
+EOCASE) || failed join_a_generic_key
+
+
+# join_v
+diff -b <(
+    python -mtabkit.scripts join -1 id -2 ID -v1 <(
+        echo -e "# id:int, fruit # ORDER: id, fruit\n1\tapple\n1\tpomegranate\n2\torange\n3\tcucumber"
+    ) <(
+        echo -e "# ID, color # ORDER: ID, color\n1\tred\n1\truby\n3\tgreen\n4\tpurple"
+    )
+) <( cat <<EOCASE
+# id:int    fruit # ORDER: id, fruit
+2   orange
+EOCASE) || failed join_v1
+
+
+# join_v_generic_key
+diff -b <(
+    python -mtabkit.scripts join -1 id -2 ID -v1 -v2 -e- <(
+        echo -e "# id, fruit # ORDER: id, fruit\n1\tapple\n1\tpomegranate\n2\torange\n3\tcucumber"
+    ) <(
+        echo -e "# ID:int, color # ORDER: ID, color\n1\tred\n1\truby\n3\tgreen\n4\tpurple"
+    )
+) <( cat <<EOCASE
+# id    fruit   color # ORDER: id, fruit, color
+2   orange  -
+4   -   purple
+EOCASE) || failed join_v_generic_key
