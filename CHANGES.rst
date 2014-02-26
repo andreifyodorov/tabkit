@@ -1,6 +1,10 @@
 Changes
 =======
 
+0.3
+---
+    * tjoin - perform the join operation on two files.
+
 0.2
 ---
 
