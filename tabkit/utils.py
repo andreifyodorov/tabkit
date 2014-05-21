@@ -213,21 +213,24 @@ class StrictWriter(WriterBase):
     doctest: Value convertable to type int expected in field 'a', but got 'banana'
 
     >>> write(a="1", b="banana", x=0)
+    >>> write(a=None, b=None, x=None)
     >>> print write.fh.getvalue() # doctest: +NORMALIZE_WHITESPACE
     # a:int b       x:bool
       1     banana  0
+
     '''
     def _get_values(self, kwargs):
         for field in self.data_desc:
             if field.name not in kwargs:
                 raise TabkitException("Field %r required" % field.name)
             value = kwargs.pop(field.name)
-            try:
-                field.type(value)
-            except (TypeError, ValueError) as e:
-                raise TabkitException(
-                    "Value convertable to type %s expected in field %r, but got %r" %
-                    (field.type.__name__, field.name, value))
+            if value is not None:
+                try:
+                    field.type(value)
+                except (TypeError, ValueError) as e:
+                    raise TabkitException(
+                        "Value convertable to type %s expected in field %r, but got %r" %
+                        (field.type.__name__, field.name, value))
             yield _str(value)
 
     def __call__(self, **kwargs):
