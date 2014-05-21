@@ -1,6 +1,10 @@
 Changes
 =======
 
+0.4
+---
+    * StrictWriter now allows None values.
+
 0.3
 ---
     * tjoin - perform the join operation on two files.
