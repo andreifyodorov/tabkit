@@ -183,6 +183,8 @@ def _str(value):  # dump True/False as 1/0 for lapidarity reasons
         return '0'
     if value is None:
         return ''
+    if isinstance(value, unicode):
+        return value.encode('utf8')
     return str(value)
 
 
@@ -225,6 +227,8 @@ class StrictWriter(WriterBase):
                 raise TabkitException("Field %r required" % field.name)
             value = kwargs.pop(field.name)
             if value is not None:
+                if isinstance(value, unicode):
+                    value = value.encode('utf8')
                 try:
                     field.type(value)
                 except (TypeError, ValueError) as e:

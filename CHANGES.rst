@@ -1,6 +1,10 @@
 Changes
 =======
 
+0.5
+---
+    * Fix unicode string writes
+
 0.4
 ---
     * StrictWriter now allows None values.
