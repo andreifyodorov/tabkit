@@ -1,6 +1,10 @@
 Changes
 =======
 
+0.6
+---
+	* SyslogStream
+
 0.5
 ---
     * Fix unicode string writes
