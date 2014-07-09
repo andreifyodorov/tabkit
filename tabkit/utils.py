@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import syslog
 from pipes import quote
 from itertools import izip, chain
 
@@ -188,18 +189,19 @@ def _str(value):  # dump True/False as 1/0 for lapidarity reasons
     return str(value)
 
 
-def Writer(fh, data_desc, strict=False):
+def Writer(fh, data_desc, strict=False, no_header=False):
     if strict:
-        return StrictWriter(fh, data_desc)
+        return StrictWriter(fh, data_desc, no_header)
     else:
-        return LooseWriter(fh, data_desc)
+        return LooseWriter(fh, data_desc, no_header)
 
 
 class WriterBase(object):
-    def __init__(self, fh, data_desc):
+    def __init__(self, fh, data_desc, no_header=False):
         self.fh = fh
         self.data_desc = data_desc
-        self.fh.write(str(data_desc) + "\n")
+        if not no_header:
+            self.fh.write(str(data_desc) + "\n")
 
 
 class StrictWriter(WriterBase):
@@ -265,3 +267,21 @@ class LooseWriter(WriterBase):
 
     def __call__(self, **kwargs):
         self.fh.write("%s\n" % "\t".join(self._get_values(kwargs)))
+
+
+class SyslogStream(object):
+    '''
+    >>> write = LooseWriter(
+    ...     SyslogStream('test', syslog.LOG_PERROR, syslog.LOG_LOCAL0),
+    ...     parse_header("# a:int, b:str"),
+    ...     no_header=True)
+    >>> write(a=10, b="test")
+    '''
+    def __init__(self, ident=None, logoption=None, facility=None):
+        self.ident = ident or sys.argv[0]
+        self.logoption = logoption or 0
+        self.facility = facility or syslog.LOG_USER
+
+    def write(self, message):
+        syslog.openlog(self.ident, self.logoption, self.facility)
+        syslog.syslog(message)
