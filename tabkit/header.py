@@ -32,9 +32,13 @@ class OrderField(object):
         return iter((self.name, self.type, self.desc))
 
 
+def _field_list(iterable, class_):
+    return [class_(*field) if not isinstance(field, class_) else field for field in iterable]
+
+
 class DataDesc(object):
     def __init__(self, fields, order=None):
-        self.fields = [Field(name, type_) for name, type_ in fields]
+        self.fields = _field_list(fields, Field)
         self.field_names = [f.name for f in self.fields]
         self.field_indices = dict((f.name, index) for index, f in enumerate(self.fields))
 
@@ -43,6 +47,7 @@ class DataDesc(object):
                 raise TabkitException("Duplicate field '%s'" % name)
 
         if order:
+            order = _field_list(order, OrderField)
             for f in order:
                 if f.name not in self:
                     raise TabkitException("Unknown order field '%s'" % f.name)
@@ -64,6 +69,9 @@ class DataDesc(object):
     def __iter__(self):
         return iter(self.fields)
 
+    def __add__(self, other):
+        return concat_data_desc(self, other)
+
     def get_field(self, field_name):
         return self.fields[self.index(field_name)]
 
@@ -75,6 +83,15 @@ class DataDesc(object):
 
     def row_class(self):
         return namedtuple('DataRow', self.field_names)
+
+
+def concat_data_desc(desc1, desc2):
+    R'''
+    >>> desc = parse_header("# a:int, b:bool # ORDER: a:num:desc, b")
+    >>> str(desc + DataDesc([('x', int), ('y', str)], [('y',)]))
+    '# a:int\tb:bool\tx:int\ty\t# ORDER: a:num:desc, b, y'
+    '''
+    return DataDesc(desc1.fields + desc2.fields, desc1.order + desc2.order)
 
 
 def split_fields(string):
@@ -150,7 +167,7 @@ def parse_header(header_str):
     if order_index >= 0:
         header_str, order_str = (
             header_str[:order_index - 1], header_str[order_index + len("# ORDER:"):])
-        order = [OrderField(name, type_, desc) for name, type_, desc in parse_order(order_str)]
+        order = [(name, type_, desc) for name, type_, desc in parse_order(order_str)]
     else:
         order = None
 

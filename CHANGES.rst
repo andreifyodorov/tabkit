@@ -1,6 +1,10 @@
 Changes
 =======
 
+0.7
+---
+	* DataDesc add
+
 0.6
 ---
 	* SyslogStream

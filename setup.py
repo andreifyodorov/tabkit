@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="tabkit",
-    version="0.6",
+    version="0.7",
     packages=find_packages(),
     entry_points={
         "console_scripts": [
@@ -19,5 +19,6 @@ setup(
     author="Andrei Fyodorov",
     author_email="sour-times@yandex.ru",
     description="Coreutils-like kit for headed tab-separated files processing",
-    license="PSF"
+    license="PSF",
+    url="https://github.com/andreifyodorov/tabkit"
 )
