@@ -1,23 +1,39 @@
 from exception import TabkitException
 
 
+def Boolean(x=None):
+    if x == "0":
+        return False
+    return bool(x)
+
+
 TYPES = {
     'str': str,
     'float': float,
     'int': int,
-    'bool': bool
+    'bool': Boolean
 }
+
+
+TYPE_NAMES = {type_: name for name, type_ in TYPES.iteritems()}
 
 
 def parse_type(type_str):
     type_str = type_str or 'str'
-    if type_str in TYPES:
-        return TYPES[type_str]
-    else:
+    type_ = TYPES.get(type_str)
+    if not type_:
         raise TabkitException("Unknown type '%s'" % type_str)
+    return type_
 
 
-type_hierarchy = (str, float, int, bool)
+def type_name(type_):
+    name = TYPE_NAMES.get(type_)
+    if not name:
+        raise TabkitException("Uknown object '%r' passed as type" % type_)
+    return name
+
+
+type_hierarchy = (str, float, int, Boolean)
 
 
 def generic_type(*types):
@@ -37,7 +53,7 @@ def infer_type(op, *types):
     elif op == "/":
         return float
     elif op in ['==', '!=', '<', '<=', '>', '>=', '&&', '||']:
-        return bool
+        return Boolean
     elif op == "int":
         return int
     elif op == "sprintf":

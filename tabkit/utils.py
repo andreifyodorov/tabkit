@@ -5,6 +5,7 @@ import syslog
 from pipes import quote
 from itertools import izip, chain
 
+from type import type_name
 from header import parse_header, generic_data_desc
 from exception import TabkitException
 
@@ -112,32 +113,36 @@ class parse_file(object):
     r'''
     >>> from exception import test_exception
     >>> file = [
-    ...     '# a:int, b:float, c',
+    ...     '# a:int, b:float, c, d:bool',
     ...     '1',
     ...     '1\t2',
-    ...     '1\t2\t3\t4',
+    ...     '1\t2\t3\t0\tsomething',
+    ...     '1\t2\t3\ttrue\t',
     ...     'a'
     ... ]
 
     >>> p = parse_file(file)
 
     >>> str(p.data_desc)
-    '# a:int\tb:float\tc'
+    '# a:int\tb:float\tc\td:bool'
 
     >>> next(p)
-    DataRow(a=1, b=0.0, c='')
+    DataRow(a=1, b=0.0, c='', d=False)
 
     >>> next(p)
-    DataRow(a=1, b=2.0, c='')
+    DataRow(a=1, b=2.0, c='', d=False)
 
     >>> next(p)
-    DataRow(a=1, b=2.0, c='3')
+    DataRow(a=1, b=2.0, c='3', d=False)
+
+    >>> next(p)
+    DataRow(a=1, b=2.0, c='3', d=True)
 
     >>> test_exception(lambda: next(p))
-    doctest: Invalid literal for int() with base 10: 'a' at line 5
+    doctest: Invalid literal for int() with base 10: 'a' at line 6
 
     >>> test_exception(lambda: list(parse_file(file, strict=True)))
-    doctest: Found 1 columns, whereas 3 columns expected at line 2
+    doctest: Found 1 columns, whereas 4 columns expected at line 2
     '''
 
     def __init__(self, stream, strict=False, data_desc=None):
@@ -236,7 +241,7 @@ class StrictWriter(WriterBase):
                 except (TypeError, ValueError) as e:
                     raise TabkitException(
                         "Value convertable to type %s expected in field %r, but got %r" %
-                        (field.type.__name__, field.name, value))
+                        (type_name(field.type), field.name, value))
             yield _str(value)
 
     def __call__(self, **kwargs):

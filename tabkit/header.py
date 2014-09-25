@@ -1,7 +1,7 @@
 import re
 from collections import namedtuple
 
-from type import parse_type, generic_type
+from type import parse_type, type_name, generic_type
 from exception import TabkitException
 
 
@@ -10,7 +10,7 @@ class Field(namedtuple('Field', 'name type')):
         if self.type == str:
             return self.name
         else:
-            return "%s:%s" % (self.name, self.type.__name__)
+            return "%s:%s" % (self.name, type_name(self.type))
 
 
 ORDER_TYPES = {'str', 'num', 'generic'}
