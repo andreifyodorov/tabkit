@@ -1,6 +1,10 @@
 Changes
 =======
 
+0.8
+---
+	* Fix boolean values parsing
+
 0.7
 ---
 	* DataDesc add
