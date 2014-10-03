@@ -1,6 +1,11 @@
 Changes
 =======
 
+0.9
+---
+	* Change SyslogStream to LogStream. Use LogStream(logging.handlers.SysLogHandler(), ...) to achieve the same.
+	  (Reason: syslog.syslog() uses libc syslog() which limits message to 2048 chars under FreeBSD)
+
 0.8
 ---
 	* Fix boolean values parsing

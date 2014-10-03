@@ -1,7 +1,7 @@
 import os
 import sys
 import subprocess
-import syslog
+import logging
 from pipes import quote
 from itertools import izip, chain
 
@@ -274,19 +274,18 @@ class LooseWriter(WriterBase):
         self.fh.write("%s\n" % "\t".join(self._get_values(kwargs)))
 
 
-class SyslogStream(object):
+class LogStream(object):
     '''
+    >>> from logging.handlers import SysLogHandler
     >>> write = LooseWriter(
-    ...     SyslogStream('test', syslog.LOG_PERROR, syslog.LOG_LOCAL0),
+    ...     LogStream(SysLogHandler(facility=SysLogHandler.LOG_LOCAL0)),
     ...     parse_header("# a:int, b:str"),
     ...     no_header=True)
     >>> write(a=10, b="test")
     '''
-    def __init__(self, ident=None, logoption=None, facility=None):
-        self.ident = ident or sys.argv[0]
-        self.logoption = logoption or 0
-        self.facility = facility or syslog.LOG_USER
+    def __init__(self, handler, **log_record_args):
+        self.handler = handler
+        self.log_record_args = log_record_args
 
-    def write(self, message):
-        syslog.openlog(self.ident, self.logoption, self.facility)
-        syslog.syslog(message)
+    def write(self, msg):
+        self.handler.emit(logging.makeLogRecord(dict(msg=msg, **self.log_record_args)))
