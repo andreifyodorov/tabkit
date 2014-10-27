@@ -7,23 +7,39 @@ from header import DataDesc
 from type import infer_type
 
 
+class List(list):
+    def __call__(self, iterable):
+        self.extend(iterable)
+
+
 def _join_exprs(exprs):
     return "".join("%s;" % expr for expr in exprs)
 
 
 class MapProgram(object):
     """
+    Map program structure:
+
     {
         row_exprs;
         if (output_cond) {
             print output;
         }
     }
+
+    >>> str(MapProgram(output=['a', 'b']) + MapProgram(output=['c', 'd']))
+    '{print a,b,c,d;}'
+
     """
-    def __init__(self):
-        self.row_exprs = list()
-        self.output_cond = list()
-        self.output = list()
+    def __init__(self, row_exprs=None, output_cond=None, output=None):
+        self.row_exprs = List(row_exprs or [])
+        self.output_cond = List(output_cond or [])
+        self.output = List(output or [])
+
+    def __add__(self, other):
+        return MapProgram(self.row_exprs + other.row_exprs,
+                          self.output_cond + other.output_cond,
+                          self.output + other.output)
 
     def __str__(self):
         body = str()
@@ -75,8 +91,8 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
                 tree = ast.parse(output_expr)
             except SyntaxError as e:
                 raise TabkitException("Syntax error: %s" % e.msg)
-            program.row_exprs.extend(output.visit(tree))
-        program.output = output.output_code()
+            program.row_exprs(output.visit(tree))
+        program.output(output.output_code())
     except TabkitException as e:
         raise TabkitException("%s in output expressions" % e)
 
@@ -87,7 +103,7 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
                 tree = ast.parse(filter_expr)
             except SyntaxError as e:
                 raise TabkitException("Syntax error: %s in filter expressions" % e.msg)
-            program.output_cond.extend(cond.visit(tree))
+            program.output_cond(cond.visit(tree))
     except TabkitException as e:
         raise TabkitException("%s in filter expressions" % e)
 
@@ -96,6 +112,8 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
 
 class GrpProgram(object):
     """
+    Group program structure:
+
     BEGIN {
         init_aggr;
     }
@@ -111,13 +129,25 @@ class GrpProgram(object):
     END {
         print grp_ouput, aggr_output;
     }
+
+    >>> str(GrpProgram(grp_output=['a', 'b']) + GrpProgram(aggr_output=['c', 'd']))
+    '{if(NR>1&&__key_0!=a&&__key_1!=b){print a,b,c,d;}__key_0=a;__key_1=b;}END{print a,b,c,d;}'
+
     """
-    def __init__(self):
-        self.init_aggr = list()
-        self.grp_exprs = list()
-        self.grp_output = list()
-        self.aggr_exprs = list()
-        self.aggr_output = list()
+    def __init__(self, init_aggr=None, grp_exprs=None, grp_output=None,
+                 aggr_exprs=None, aggr_output=None):
+        self.init_aggr = List(init_aggr or [])
+        self.grp_exprs = List(grp_exprs or [])
+        self.grp_output = List(grp_output or [])
+        self.aggr_exprs = List(aggr_exprs or [])
+        self.aggr_output = List(aggr_output or [])
+
+    def __add__(self, other):
+        return GrpProgram(self.init_aggr + other.init_aggr,
+                          self.grp_exprs + other.grp_exprs,
+                          self.grp_output + other.grp_output,
+                          self.aggr_exprs + other.aggr_exprs,
+                          self.aggr_output + other.aggr_output)
 
     def __str__(self):
         begin = str()
@@ -143,23 +173,43 @@ class GrpProgram(object):
 
         end = str()
         if print_expr:
-            end = "END(%s}" % print_expr
+            end = "END{%s}" % print_expr
 
         return "%s{%s}%s" % (begin, body, end)
 
 
 def grp_program(data_desc, grp_exprs, aggr_exprs=None):
-    r'''
+    R'''
     >>> import re
     >>> from header import parse_header
     >>> data_desc = parse_header("# a, b, c, d")
     >>> awk, output_data_desc = grp_program(
     ...     data_desc,
-    ...     grp_exprs=['a;log_b=2**int(log(b=d))'],
-    ...     aggr_exprs=['sum_c=sum(c)/log_b;cnt_d=count(d)']
+    ...     grp_exprs=['a;log_b=2**int(log(b))'],
+    ...     aggr_exprs=['sum_c=sum(c)/log_b;cnt_d=count()']
     ... )
     >>> print re.sub('([{};])', r'\1\n', str(awk))  # doctest: +NORMALIZE_WHITESPACE
-
+    BEGIN{
+        __aggr__1=0;
+        __aggr__3=0;
+    }
+    {
+        __var__0=(2**int(log($2)));
+        if(NR>1&&__key_0!=$1&&__key_1!=__var__0){
+            print $1,__var__0,__aggr__0,__aggr__2;
+            __aggr__1=0;
+            __aggr__3=0;
+        }
+        __aggr__1+=$3;
+        __aggr__3++;
+        __aggr__0=(__aggr__1/__var__0);
+        __aggr__2=__aggr__3;
+        __key_0=$1;
+        __key_1=__var__0;
+    }
+    END{
+        print $1,__var__0,__aggr__0,__aggr__2;
+    }
     '''
     aggr_exprs = aggr_exprs or list()
 
@@ -172,10 +222,10 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
                 tree = ast.parse(grp_expr)
             except SyntaxError as e:
                 raise TabkitException("Syntax error: %s" % e.msg)
-            program.grp_exprs.extend(group.visit(tree))
+            program.grp_exprs(group.visit(tree))
     except TabkitException as e:
         raise TabkitException("%s in group expressions" % e)
-    program.grp_output.extend(group.output_code())
+    program.grp_output(group.output_code())
 
     try:
         aggr = AggregateAwkGenerator(data_desc, group_context=group.context)
@@ -184,11 +234,11 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
                 tree = ast.parse(aggr_expr)
             except SyntaxError as e:
                 raise TabkitException("Syntax error: %s" % e.msg)
-            program.aggr_exprs.extend(aggr.visit(tree))
+            program.aggr_exprs(aggr.visit(tree))
     except TabkitException as e:
         raise TabkitException("%s in aggregate expressions" % e)
-    program.init_aggr.extend(aggr.init_code())
-    program.aggr_output.extend(aggr.output_code())
+    program.init_aggr(aggr.init_code())
+    program.aggr_output(aggr.output_code())
 
     output_data_desc = group.output_data_desc() + aggr.output_data_desc()
 
@@ -505,16 +555,5 @@ class AggregateAwkGenerator(OutputAwkGenerator):
 
 
 if __name__ == "__main__":
-    # import doctest
-    # doctest.testmod(raise_on_error=True)
-    import re
-    from header import parse_header
-    data_desc = parse_header("# a, b, c, d")
-    awk, output_data_desc = grp_program(
-        data_desc,
-        grp_exprs=['a;log_b=2**int(log(b))'],
-        aggr_exprs=['sum_c=sum(c)/log_b;cnt=count();_avg_d=sum(d)/count();cnt10_d=_avg_d*10']
-    )
-    # print re.sub('([{};])', r'\1\n', str(awk))
-    print awk
-    print output_data_desc
+    import doctest
+    doctest.testmod(raise_on_error=True)
