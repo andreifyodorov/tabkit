@@ -1,17 +1,22 @@
 from exception import TabkitException
 
 
-def Boolean(x=None):
+TabkitStr = str
+TabkitFloat = float
+TabkitInt = int
+
+
+def TabkitBoolean(x=None):
     if x == "0":
         return False
     return bool(x)
 
 
 TYPES = {
-    'str': str,
-    'float': float,
-    'int': int,
-    'bool': Boolean
+    'str': TabkitStr,
+    'float': TabkitFloat,
+    'int': TabkitInt,
+    'bool': TabkitBoolean
 }
 
 
@@ -33,7 +38,7 @@ def type_name(type_):
     return name
 
 
-type_hierarchy = (str, float, int, Boolean)
+type_hierarchy = (TabkitStr, TabkitFloat, TabkitInt, TabkitBoolean)
 
 
 def generic_type(*types):
@@ -46,19 +51,13 @@ def narrowest_type(*types):
 
 def infer_type(op, *types):
     if op in ['+', '-', '*', '**']:
-        if float in types:
-            return float
+        if TabkitFloat in types:
+            return TabkitFloat
         else:
-            return int
+            return TabkitInt
     elif op == "/":
-        return float
+        return TabkitFloat
     elif op in ['==', '!=', '<', '<=', '>', '>=', '&&', '||']:
-        return Boolean
-    elif op == "int":
-        return int
-    elif op == "sprintf":
-        return str
-    elif op in ['log', 'exp']:
-        return float
+        return TabkitBoolean
 
     raise TabkitException("Unable to infer type for operation '%s'" % (op,))
