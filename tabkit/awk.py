@@ -272,15 +272,16 @@ class ColumnExpression(Expression):
     pass
 
 
-class AwkGenerator(ast.NodeVisitor):
-    binops = {
-        ast.Add: '+',
-        ast.Sub: '-',
-        ast.Mult: '*',
-        ast.Pow: '**',
-        ast.Div: '/'
-    }
+class Function(object):
+    def __init__(self, template, type):
+        self.template = template
+        self.type = type
 
+    def code(self, args):
+        return self.template % ",".join(arg.code for arg in args)
+
+
+class AwkNodeVisitor(ast.NodeVisitor):
     compareops = {
         ast.Eq: '==',
         ast.NotEq: '!=',
@@ -290,18 +291,74 @@ class AwkGenerator(ast.NodeVisitor):
         ast.GtE: '>='
     }
 
+    def visit_Compare(self, node):
+        if not (len(node.ops) == 1 and len(node.comparators) == 1):
+            raise TabkitException("Syntax error: multiple comparators are not supported")
+        op = type(node.ops[0])
+        if op not in self.compareops:
+            raise TabkitException(
+                "Syntax error: compare operation '%s' is not suported" % op.__name__)
+        return [self.visit(node.left), self.visit(node.comparators[0])]
+
     boolops = {
         ast.And: '&&',
         ast.Or: '||'
     }
 
-    funcs = {
-        'int': TabkitTypes.int,
-        'sprintf': TabkitTypes.str,
-        'log': TabkitTypes.float,
-        'exp': TabkitTypes.float
+    def visit_BoolOp(self, node):
+        op = type(node.op)
+        if op not in self.boolops:
+            raise TabkitException(
+                "Syntax error: boolean operation '%s' is not supported" % op.__name__)
+        return [self.visit(value) for value in node.values]
+
+    binops = {
+        ast.Add: '+',
+        ast.Sub: '-',
+        ast.Mult: '*',
+        ast.Pow: '**',
+        ast.Div: '/'
     }
 
+    def visit_BinOp(self, node):
+        op = type(node.op)
+        if op not in self.binops:
+            raise TabkitException(
+                "Syntax error: binary operation '%s' is not supported" % op.__name__)
+        return [self.visit(node.left), self.visit(node.right)]
+
+    funcs = {
+        'int': Function('int(%s)', TabkitTypes.int),
+        'sprintf': Function('sprintf(%s)', TabkitTypes.str),
+        'log': Function('log(%s)', TabkitTypes.float),
+        'exp': Function('exp(%s)', TabkitTypes.float),
+        'bool': Function('!!%s', TabkitTypes.bool)
+    }
+
+    def visit_Call(self, node):
+        if node.keywords or node.kwargs or node.starargs:
+            raise TabkitException("Syntax error: only positional arguments to functions allowed")
+        if node.func.id not in self.funcs:
+            raise TabkitException("Syntax error: unknown function '%s'" % (func,))
+        return [self.visit(arg) for arg in node.args]
+
+    def visit_Expr(self, node):
+        return self.visit(node.value)
+
+    def visit_Num(self, node):
+        pass
+
+    def visit_Str(self, node):
+        pass
+
+    def visit_Name(self, node):
+        pass
+
+    def generic_visit(self, node):
+        raise TabkitException("Syntax error: '%s' is not supported" % type(node).__name__)
+
+
+class AwkGenerator(AwkNodeVisitor):
     def __init__(self, data_desc, context=None):
         self.data_desc = data_desc
         self.context = context or dict()
@@ -313,22 +370,9 @@ class AwkGenerator(ast.NodeVisitor):
     def _new_var(self):
         return self.var_name_template % next(self.var_count)
 
-    def visit_Expr(self, node):
-        return self.visit(node.value)
-
     def visit_Compare(self, node):
-        if not (len(node.ops) == 1 and len(node.comparators) == 1):
-            raise TabkitException("Syntax error: multiple comparators are not supported")
-
+        left_expr, right_expr = super(AwkGenerator, self).visit_Compare(node)
         op = self.compareops.get(type(node.ops[0]))
-        if op is None:
-            raise TabkitException(
-                "Syntax error: compare operation '%s' is not suported" %
-                (node.ops[0].__class__.__name__,)
-            )
-
-        left_expr = self.visit(node.left)
-        right_expr = self.visit(node.comparators[0])
         return Expression(
             code="%s%s%s" % (left_expr.code, op, right_expr.code),
             type=infer_type(op, left_expr.type, right_expr.type),
@@ -336,8 +380,8 @@ class AwkGenerator(ast.NodeVisitor):
         )
 
     def visit_BoolOp(self, node):
+        exprs = super(AwkGenerator, self).visit_BoolOp(node)
         op = self.boolops[type(node.op)]
-        exprs = [self.visit(value) for value in node.values]
         return Expression(
             code="(%s)" % op.join(expr.code for expr in exprs),
             type=infer_type(op, *(expr.type for expr in exprs)),
@@ -345,14 +389,8 @@ class AwkGenerator(ast.NodeVisitor):
         )
 
     def visit_BinOp(self, node):
-        op = self.binops.get(type(node.op), None)
-        if op is None:
-            raise TabkitException(
-                "Syntax error: binary operation '%s' is not supported" %
-                (node.op.__class__.__name__,))
-
-        left_expr = self.visit(node.left)
-        right_expr = self.visit(node.right)
+        left_expr, right_expr = super(AwkGenerator, self).visit_BinOp(node)
+        op = self.binops[type(node.op)]
         return Expression(
             code="(%s%s%s)" % (left_expr.code, op, right_expr.code),
             type=infer_type(op, left_expr.type, right_expr.type),
@@ -372,15 +410,12 @@ class AwkGenerator(ast.NodeVisitor):
         )
 
     def visit_Call(self, node):
-        func = node.func.id
-        if node.keywords or node.kwargs or node.starargs:
-            raise TabkitException("Syntax error: only positional arguments to functions allowed")
-        if func not in self.funcs:
-            raise TabkitException("Syntax error: unknown function '%s'" % (func,))
-        args = [self.visit(arg) for arg in node.args]
+        func_name = node.func.id
+        func = self.funcs[func_name]
+        args = super(AwkGenerator, self).visit_Call(node)
         return Expression(
-            code="%s(%s)" % (func, ",".join(arg.code for arg in args)),
-            type=self.funcs[func],
+            code=func.code(args),
+            type=func.type,
             children=args
         )
 
@@ -395,9 +430,6 @@ class AwkGenerator(ast.NodeVisitor):
             return self.context[node.id]
 
         raise TabkitException("Unknown identifier '%s'" % (node.id,))
-
-    def generic_visit(self, node):
-        raise TabkitException("Syntax error: '%s' is not supported" % (node.__class__.__name__,))
 
 
 class OutputAwkGenerator(AwkGenerator):
