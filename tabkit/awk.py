@@ -4,7 +4,7 @@ from itertools import chain, count
 
 from exception import TabkitException
 from header import DataDesc
-from type import infer_type
+from type import TabkitTypes, infer_type
 
 
 class List(list):
@@ -61,7 +61,7 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
     >>> awk, output_data_desc = map_program(
     ...     data_desc,
     ...     output_exprs=[
-    ...         'a=b+c;b=a/c;_hidden=a*3;', 'new=_hidden/3', 'b=a+1', 'a', 'b', 'c', 'd'
+    ...         'a=b+c;b=a/c;_hidden=a*3;', 'new=_hidden/3', 'b=a+1', 'a2=a', 'a', 'b', 'c', 'd'
     ...     ],
     ...     filter_exprs=['new==a*d or new==d*a', '_hidden>=new']
     ... )
@@ -73,12 +73,12 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
         __var__3=(__var__2/3);
         __var__1=($1+1);
         if((__var__3==($1*$4)||__var__3==($4*$1))&&__var__2>=__var__3){
-            print __var__0,__var__1,__var__3,$3,$4;
+            print __var__0,__var__1,__var__3,$1,$3,$4;
         }
     }
 
     >>> str(output_data_desc)
-    '# a:int\tb:int\tnew:float\tc\td'
+    '# a:int\tb:int\tnew:float\ta2\tc\td'
     '''
     filter_exprs = filter_exprs or list()
 
@@ -131,7 +131,7 @@ class GrpProgram(object):
     }
 
     >>> str(GrpProgram(grp_output=['a', 'b']) + GrpProgram(aggr_output=['c', 'd']))
-    '{if(NR>1&&__key_0!=a&&__key_1!=b){print a,b,c,d;}__key_0=a;__key_1=b;}END{print a,b,c,d;}'
+    '{if(NR>1&&__key__0!=a&&__key__1!=b){print a,b,c,d;}__key__0=a;__key__1=b;}END{print a,b,c,d;}'
 
     """
     def __init__(self, init_aggr=None, grp_exprs=None, grp_output=None,
@@ -159,17 +159,17 @@ class GrpProgram(object):
         if self.grp_exprs:
             body += _join_exprs(self.grp_exprs)
 
+        keys = [("__key__%x" % n, expr) for n, expr in enumerate(self.grp_output)]
         print_expr = "print %s;" % ",".join(expr for expr in self.grp_output + self.aggr_output)
         key_expr = "&&".join(
-            ["NR>1"] + ["__key_%d!=%s" % (n, expr) for n, expr in enumerate(self.grp_output)])
+            ["NR>1"] + ["%s!=%s" % (var, expr) for var, expr in keys])
         body += "if(%s){%s%s}" % (key_expr, print_expr, init_aggr)
 
         if self.aggr_exprs:
             body += _join_exprs(self.aggr_exprs)
 
         if self.grp_output:
-            body += _join_exprs(
-                "__key_%d=%s" % (n, expr) for n, expr in enumerate(self.grp_output))
+            body += _join_exprs("%s=%s" % (var, expr) for var, expr in keys)
 
         end = str()
         if print_expr:
@@ -185,31 +185,34 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     >>> data_desc = parse_header("# a, b, c, d")
     >>> awk, output_data_desc = grp_program(
     ...     data_desc,
-    ...     grp_exprs=['a;log_b=2**int(log(b))'],
+    ...     grp_exprs=['new_a=a;b;log_b=2**int(log(b))'],
     ...     aggr_exprs=['sum_c=sum(c)/log_b;cnt_d=count()']
     ... )
     >>> print re.sub('([{};])', r'\1\n', str(awk))  # doctest: +NORMALIZE_WHITESPACE
     BEGIN{
-        __aggr__1=0;
-        __aggr__3=0;
+        __aggr__0=0;
+        __aggr__2=0;
     }
     {
         __var__0=(2**int(log($2)));
-        if(NR>1&&__key_0!=$1&&__key_1!=__var__0){
-            print $1,__var__0,__aggr__0,__aggr__2;
-            __aggr__1=0;
-            __aggr__3=0;
+        if(NR>1&&__key__0!=$1&&__key__1!=$2&&__key__2!=__var__0){
+            print $1,$2,__var__0,__aggr__1,__aggr__3;
+            __aggr__0=0;
+            __aggr__2=0;
         }
-        __aggr__1+=$3;
-        __aggr__3++;
-        __aggr__0=(__aggr__1/__var__0);
-        __aggr__2=__aggr__3;
-        __key_0=$1;
-        __key_1=__var__0;
+        __aggr__0+=$3;
+        __aggr__2++;
+        __aggr__1=(__aggr__0/__var__0);
+        __aggr__3=__aggr__2;
+        __key__0=$1;
+        __key__1=$2;
+        __key__2=__var__0;
     }
     END{
-        print $1,__var__0,__aggr__0,__aggr__2;
+        print $1,$2,__var__0,__aggr__1,__aggr__3;
     }
+    >>> str(output_data_desc)
+    '# new_a\tb\tlog_b:int\tsum_c:float\tcnt_d:int'
     '''
     aggr_exprs = aggr_exprs or list()
 
@@ -246,20 +249,27 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
 
 
 class Statement(object):
-    def __init__(self, code):
+    def __init__(self, code, children=None):
         self.code = code
+        self.children = children
 
 
 class Assignment(Statement):
-    def __init__(self, code, value):
-        super(Assignment, self).__init__(code)
+    def __init__(self, code, value, children=None):
+        super(Assignment, self).__init__(code, children)
         self.value = value
 
 
 class Expression(Statement):
-    def __init__(self, code, type, subexprs=None):
-        super(Expression, self).__init__(code)
+    def __init__(self, code, type, children=None):
+        super(Expression, self).__init__(code, children)
         self.type = type
+        self.children = children
+
+
+class ColumnExpression(Expression):
+    """ Simple column expression like '$1' """
+    pass
 
 
 class AwkGenerator(ast.NodeVisitor):
@@ -285,21 +295,20 @@ class AwkGenerator(ast.NodeVisitor):
         ast.Or: '||'
     }
 
-    allowed_funcs = {
-        'int',
-        'sprintf',
-        'log',
-        'exp'
+    funcs = {
+        'int': TabkitTypes.int,
+        'sprintf': TabkitTypes.str,
+        'log': TabkitTypes.float,
+        'exp': TabkitTypes.float
     }
-
-    expression_class = Expression
-    var_name_template = "__var__%d"
 
     def __init__(self, data_desc, context=None):
         self.data_desc = data_desc
         self.context = context or dict()
         self.var_count = count()
         super(AwkGenerator, self).__init__()
+
+    var_name_template = "__var__%x"
 
     def _new_var(self):
         return self.var_name_template % next(self.var_count)
@@ -320,18 +329,20 @@ class AwkGenerator(ast.NodeVisitor):
 
         left_expr = self.visit(node.left)
         right_expr = self.visit(node.comparators[0])
-        return self.expression_class(
+        return Expression(
             code="%s%s%s" % (left_expr.code, op, right_expr.code),
             type=infer_type(op, left_expr.type, right_expr.type),
-            subexprs=[left_expr, right_expr])
+            children=[left_expr, right_expr]
+        )
 
     def visit_BoolOp(self, node):
         op = self.boolops[type(node.op)]
         exprs = [self.visit(value) for value in node.values]
-        return self.expression_class(
+        return Expression(
             code="(%s)" % op.join(expr.code for expr in exprs),
             type=infer_type(op, *(expr.type for expr in exprs)),
-            subexprs=exprs)
+            children=exprs
+        )
 
     def visit_BinOp(self, node):
         op = self.binops.get(type(node.op), None)
@@ -342,33 +353,41 @@ class AwkGenerator(ast.NodeVisitor):
 
         left_expr = self.visit(node.left)
         right_expr = self.visit(node.right)
-        return self.expression_class(
+        return Expression(
             code="(%s%s%s)" % (left_expr.code, op, right_expr.code),
             type=infer_type(op, left_expr.type, right_expr.type),
-            subexprs=[left_expr, right_expr])
+            children=[left_expr, right_expr]
+        )
 
     def visit_Num(self, node):
-        return self.expression_class(code=str(node.n), type=type(node.n))
+        return Expression(
+            code=str(node.n),
+            type=type(node.n)
+        )
 
     def visit_Str(self, node):
-        return self.expression_class(code='"%s"' % node.s.replace('"', '\\"'), type=str)
+        return Expression(
+            code='"%s"' % node.s.replace('"', '\\"'),
+            type=str
+        )
 
     def visit_Call(self, node):
         func = node.func.id
         if node.keywords or node.kwargs or node.starargs:
             raise TabkitException("Syntax error: only positional arguments to functions allowed")
-        if func not in self.allowed_funcs:
+        if func not in self.funcs:
             raise TabkitException("Syntax error: unknown function '%s'" % (func,))
         args = [self.visit(arg) for arg in node.args]
-        return self.expression_class(
+        return Expression(
             code="%s(%s)" % (func, ",".join(arg.code for arg in args)),
-            type=infer_type(func, *(arg.type for arg in args)),
-            subexprs=args)
+            type=self.funcs[func],
+            children=args
+        )
 
     def visit_Name(self, node):
         if node.id in self.data_desc:
             field_index = self.data_desc.index(node.id)
-            return self.expression_class(
+            return ColumnExpression(
                 code="$%d" % (field_index + 1,),
                 type=self.data_desc.fields[field_index].type)
 
@@ -401,7 +420,7 @@ class OutputAwkGenerator(AwkGenerator):
                 field_name = stmt.value.id
                 if field_name in self.data_desc:
                     if field_name not in self.context:
-                        self.context[field_name] = self.expression_class(
+                        self.context[field_name] = Expression(
                             code="$%d" % (self.data_desc.index(field_name) + 1),
                             type=self.data_desc.get_field(field_name).type
                         )
@@ -409,6 +428,8 @@ class OutputAwkGenerator(AwkGenerator):
                     continue
 
             expr = self.visit(stmt)
+            if expr is None:
+                continue
             if not isinstance(expr, Assignment):
                 raise TabkitException('Syntax error: assign statements or field names expected')
 
@@ -421,19 +442,22 @@ class OutputAwkGenerator(AwkGenerator):
             raise TabkitException('Syntax error: multiple targets are not allowed in assignment')
 
         target_name = node.targets[0].id
+        value = self.visit(node.value)
+
         if target_name in self.context:
             target_var_name = self.context[target_name].code
         else:
-            target_var_name = self._new_var()
             if not target_name.startswith("_"):
                 self.output.append(target_name)
+            if isinstance(value, ColumnExpression):
+                self.context[target_name] = value
+                return None
+            target_var_name = self._new_var()
 
-        value = self.visit(node.value)
-
-        assign_expr = self.expression_class(
+        assign_expr = Expression(
             code=target_var_name,
             type=value.type,
-            subexprs=[value])
+            children=[value])
         self.context[target_name] = assign_expr
 
         return Assignment(
@@ -449,50 +473,44 @@ class ConditionAwkGenerator(AwkGenerator):
         return code
 
 
-class AggregateExpression(Expression):
-    def __init__(self, code, type, subexprs=None, aggregated=None):
-        super(AggregateExpression, self).__init__(code, type, subexprs)
-        if aggregated is None:
-            if subexprs:
-                aggregated = all(expr.aggregated for expr in subexprs)
-            else:
-                aggregated = False
-        self.aggregated = aggregated
+class AggregatedExpression(Expression):
+    @classmethod
+    def from_expression(cls, expr):
+        return cls(code=expr.code, type=expr.type, children=expr.children)
 
 
 class AggregateFunction(object):
-    _init_template = "%s=0"
+    init_code_template = "%s=0"
 
     def __init__(self, var_name, *args):
         self.var_name = var_name
         self.args = tuple(arg.code for arg in args)
 
     @property
-    def init(self):
-        return self._init_template % self.var_name
+    def init_code(self):
+        return self.init_code_template % self.var_name
 
     @property
     def code(self):
-        return self._code_template % ((self.var_name,) + self.args)
+        return self.code_template % ((self.var_name,) + self.args)
 
 
 class SumFunction(AggregateFunction):
-    _code_template = "%s+=%s"
+    code_template = "%s+=%s"
 
     def __init__(self, var_name, arg):
         super(SumFunction, self).__init__(var_name, arg)
 
 
 class CountFunction(AggregateFunction):
-    _code_template = "%s++"
+    code_template = "%s++"
 
     def __init__(self, var_name):
         super(CountFunction, self).__init__(var_name)
 
 
 class AggregateAwkGenerator(OutputAwkGenerator):
-    expression_class = AggregateExpression
-    var_name_template = "__aggr__%d"
+    var_name_template = "__aggr__%x"
 
     aggregate_funcs = {
         'sum': SumFunction,
@@ -505,7 +523,17 @@ class AggregateAwkGenerator(OutputAwkGenerator):
         self.aggregators = list()
 
     def init_code(self):
-        return (aggr.init for aggr in self.aggregators)
+        return (aggr.init_code for aggr in self.aggregators)
+
+    def visit(self, node):
+        """ If all constituent expression are aggregated, then the result is aggregated """
+        expr = super(AggregateAwkGenerator, self).visit(node)
+        if (isinstance(expr, Statement)
+                and not isinstance(expr, AggregatedExpression)
+                and expr.children
+                and all(isinstance(child, AggregatedExpression) for child in expr.children)):
+            return AggregatedExpression.from_expression(expr)
+        return expr
 
     def visit_Call(self, node):
         func = node.func.id
@@ -515,30 +543,28 @@ class AggregateAwkGenerator(OutputAwkGenerator):
             var_name = self._new_var()
             args = [self.visit(arg) for arg in node.args]
             self.aggregators.append(self.aggregate_funcs[func](var_name, *args))
-            return self.expression_class(
+            return AggregatedExpression(
                 code=var_name,
                 type=int,
-                aggregated=True)
+                children=args
+            )
         return super(AggregateAwkGenerator, self).visit_Call(node)
 
     def visit_Num(self, node):
-        expr = super(AggregateAwkGenerator, self).visit_Num(node)
-        expr.aggregated = True
-        return expr
+        return AggregatedExpression.from_expression(
+            super(AggregateAwkGenerator, self).visit_Num(node))
 
     def visit_Str(self, node):
-        expr = super(AggregateAwkGenerator, self).visit_Str(node)
-        expr.aggregated = True
-        return expr
+        return AggregatedExpression.from_expression(
+            super(AggregateAwkGenerator, self).visit_Str(node))
 
     def visit_Name(self, node):
         if node.id in self.group_context:
             expr = self.group_context[node.id]
-            return self.expression_class(
+            return AggregatedExpression(
                 code=expr.code,
-                type=expr.type,
-                aggregated=True)
-
+                type=expr.type
+            )
         return super(AggregateAwkGenerator, self).visit_Name(node)
 
     def visit_Module(self, node):
@@ -547,7 +573,7 @@ class AggregateAwkGenerator(OutputAwkGenerator):
             assign = self.visit(stmt)
             if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements expected')
-            if not assign.value.aggregated:
+            if not isinstance(assign.value, AggregatedExpression):
                 raise TabkitException(
                     "Syntax error: need aggregate function")
             code.append(assign.code)
