@@ -1,44 +1,41 @@
 from exception import TabkitException
+from collections import namedtuple
 
 
-TabkitStr = str
-TabkitFloat = float
-TabkitInt = int
-
-
-def TabkitBoolean(x=None):
+def parse_boolean(x=None):
     if x == "0":
         return False
     return bool(x)
 
 
-TYPES = {
-    'str': TabkitStr,
-    'float': TabkitFloat,
-    'int': TabkitInt,
-    'bool': TabkitBoolean
-}
+TabkitTypesClass = namedtuple('TabkitType', 'str float int bool')
 
+TabkitTypes = TabkitTypeClass(
+    str=str,
+    float=float,
+    int=int,
+    bool=parse_boolean
+)
 
-TYPE_NAMES = {type_: name for name, type_ in TYPES.iteritems()}
+type_names = {type_: name for name, type_ in TabkitTypes._asdict().iteritems()}
 
 
 def parse_type(type_str):
     type_str = type_str or 'str'
-    type_ = TYPES.get(type_str)
+    type_ = getattr(TabkitTypes, type_str, None)
     if not type_:
         raise TabkitException("Unknown type '%s'" % type_str)
     return type_
 
 
 def type_name(type_):
-    name = TYPE_NAMES.get(type_)
+    name = type_names.get(type_)
     if not name:
         raise TabkitException("Uknown object '%r' passed as type" % type_)
     return name
 
 
-type_hierarchy = (TabkitStr, TabkitFloat, TabkitInt, TabkitBoolean)
+type_hierarchy = (TabkitTypes.str, TabkitTypes.float, TabkitTypes.int, TabkitTypes.bool)
 
 
 def generic_type(*types):
@@ -51,13 +48,13 @@ def narrowest_type(*types):
 
 def infer_type(op, *types):
     if op in ['+', '-', '*', '**']:
-        if TabkitFloat in types:
-            return TabkitFloat
+        if TabkitTypes.float in types:
+            return TabkitTypes.float
         else:
-            return TabkitInt
+            return TabkitTypes.int
     elif op == "/":
-        return TabkitFloat
+        return TabkitTypes.float
     elif op in ['==', '!=', '<', '<=', '>', '>=', '&&', '||']:
-        return TabkitBoolean
+        return TabkitTypes.bool
 
     raise TabkitException("Unable to infer type for operation '%s'" % (op,))
