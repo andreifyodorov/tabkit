@@ -8,9 +8,9 @@ def parse_boolean(x=None):
     return bool(x)
 
 
-TabkitTypesClass = namedtuple('TabkitType', 'str float int bool')
+TabkitTypesClass = namedtuple('TabkitTypesClass', 'str float int bool')
 
-TabkitTypes = TabkitTypeClass(
+TabkitTypes = TabkitTypesClass(
     str=str,
     float=float,
     int=int,
