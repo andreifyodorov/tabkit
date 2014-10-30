@@ -504,13 +504,13 @@ class ConditionAwkGenerator(AwkGenerator):
         return code
 
 
-class AggregatedExpression(Expression):
+class AggregateExpression(Expression):
     @classmethod
     def from_expression(cls, expr):
         return cls(code=expr.code, type=expr.type, children=expr.children)
 
 
-class SimpleAggregatedExpressions(AggregatedExpression, SimpleExpression):
+class SimpleAggregateExpressions(AggregateExpression, SimpleExpression):
     pass
 
 
@@ -580,10 +580,10 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
         """ If all constituent expression are aggregated, then the result is aggregated """
         expr = super(AggregateAwkGenerator, self).visit(node)
         if (isinstance(expr, Statement)
-                and not isinstance(expr, AggregatedExpression)
+                and not isinstance(expr, AggregateExpression)
                 and expr.children
-                and all(isinstance(child, AggregatedExpression) for child in expr.children)):
-            return AggregatedExpression.from_expression(expr)
+                and all(isinstance(child, AggregateExpression) for child in expr.children)):
+            return AggregateExpression.from_expression(expr)
         return expr
 
     def visit_AggregateFunction(self, node):
@@ -591,24 +591,24 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
         args = super(AggregateAwkGenerator, self).visit_AggregateFunction(node)
         func = self.aggregate_funcs[node.func.id](var_name, *args)
         self.aggregators.append(func)
-        return SimpleAggregatedExpressions(
+        return SimpleAggregateExpressions(
             code=var_name,
             type=func.type,
             children=args
         )
 
     def visit_Num(self, node):
-        return AggregatedExpression.from_expression(
+        return AggregateExpression.from_expression(
             super(AggregateAwkGenerator, self).visit_Num(node))
 
     def visit_Str(self, node):
-        return AggregatedExpression.from_expression(
+        return AggregateExpression.from_expression(
             super(AggregateAwkGenerator, self).visit_Str(node))
 
     def visit_Name(self, node):
         if node.id in self.group_context:
             expr = self.group_context[node.id]
-            return AggregatedExpression(
+            return AggregateExpression(
                 code=expr.code,
                 type=expr.type
             )
@@ -622,7 +622,7 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
                 continue
             if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements expected')
-            if not isinstance(assign.value, AggregatedExpression):
+            if not isinstance(assign.value, AggregateExpression):
                 raise TabkitException(
                     "Syntax error: need aggregate function")
             code.append(assign.code)
