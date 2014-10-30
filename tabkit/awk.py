@@ -42,15 +42,12 @@ class MapProgram(object):
                           self.output + other.output)
 
     def __str__(self):
-        body = str()
-        if self.row_exprs:
-            body += _join_exprs(self.row_exprs)
-        print_expr = "print %s;" % ",".join(self.output)
-        if self.output_cond:
-            body += "if(%s){%s}" % ("&&".join(self.output_cond), print_expr)
-        else:
-            body += print_expr
-        return "{%s}" % body
+        row_exprs = _join_exprs(self.row_exprs)
+        if row_exprs:
+            row_exprs = "{%s}" % row_exprs
+        output_cond = "&&".join(self.output_cond)
+        output_exprs = ",".join(self.output)
+        return "%s%s{print %s;}" % (row_exprs, output_cond, output_exprs)
 
 
 def map_program(data_desc, output_exprs, filter_exprs=None):
@@ -72,9 +69,9 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
         __var__2=($1*3);
         __var__3=(__var__2/3);
         __var__1=($1+1);
-        if((__var__3==($1*$4)||__var__3==($4*$1))&&__var__2>=__var__3){
-            print __var__0,__var__1,__var__3,$1,$3,$4;
-        }
+    }
+    (__var__3==($1*$4)||__var__3==($4*$1))&&__var__2>=__var__3{
+        print __var__0,__var__1,__var__3,$1,$3,$4;
     }
 
     >>> str(output_data_desc)
@@ -114,24 +111,23 @@ class GrpProgram(object):
     """
     Group program structure:
 
-    BEGIN {
+    {
+        grp_exrps;
+    }
+    (_keys != grp_output) {
+        if (NR>1) print _keys, aggr_output;
+        _keys = grp_output;
         init_aggr;
     }
     {
-        grp_exrps;
-        if (NR>1 && _keys != grp_output) {
-            print grp_output, aggr_output;
-            init_aggr;
-        }
         aggr_exprs;
-        _keys = grp_output;
     }
     END {
         print grp_ouput, aggr_output;
     }
 
-    >>> str(GrpProgram(grp_output=['a', 'b']) + GrpProgram(aggr_output=['c', 'd']))
-    '{if(NR>1&&__key__0!=a&&__key__1!=b){print a,b,c,d;}__key__0=a;__key__1=b;}END{print a,b,c,d;}'
+    >>> str(GrpProgram(grp_output=['a']) + GrpProgram(aggr_output=['c', 'd']))
+    '__key__0!=a{if(NR>1)print __key__0,c,d;__key__0=a;}END{print __key__0,c,d;}'
 
     """
     def __init__(self, init_aggr=None, grp_exprs=None, grp_output=None,
@@ -150,32 +146,23 @@ class GrpProgram(object):
                           self.aggr_output + other.aggr_output)
 
     def __str__(self):
-        begin = str()
-        init_aggr = _join_exprs(self.init_aggr)
-        if init_aggr:
-            begin = "BEGIN{%s}" % init_aggr
-
-        body = str()
-        if self.grp_exprs:
-            body += _join_exprs(self.grp_exprs)
+        grp_exprs = _join_exprs(self.grp_exprs)
+        if grp_exprs:
+            grp_exprs = "{%s}" % grp_exprs
 
         keys = [("__key__%x" % n, expr) for n, expr in enumerate(self.grp_output)]
-        print_expr = "print %s;" % ",".join(expr for expr in self.grp_output + self.aggr_output)
-        key_expr = "&&".join(
-            ["NR>1"] + ["%s!=%s" % (var, expr) for var, expr in keys])
-        body += "if(%s){%s%s}" % (key_expr, print_expr, init_aggr)
+        print_exprs = [var for (var, expr) in keys] + self.aggr_output
+        print_expr = "print %s;" % ",".join(expr for expr in print_exprs)
+        key_cond = "%s" % "||".join("%s!=%s" % (var, expr) for var, expr in keys)
+        key_exprs = _join_exprs("%s=%s" % (var, expr) for var, expr in keys)
 
-        if self.aggr_exprs:
-            body += _join_exprs(self.aggr_exprs)
+        init_aggr = _join_exprs(self.init_aggr)
+        aggr_exprs = _join_exprs(self.aggr_exprs)
+        if aggr_exprs:
+            aggr_exprs = "{%s}" % aggr_exprs
 
-        if self.grp_output:
-            body += _join_exprs("%s=%s" % (var, expr) for var, expr in keys)
-
-        end = str()
-        if print_expr:
-            end = "END{%s}" % print_expr
-
-        return "%s{%s}%s" % (begin, body, end)
+        return "%s%s{if(NR>1)%s%s%s}%sEND{%s}" % (
+            grp_exprs, key_cond, print_expr, key_exprs, init_aggr, aggr_exprs, print_expr)
 
 
 def grp_program(data_desc, grp_exprs, aggr_exprs=None):
@@ -189,26 +176,24 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     ...     aggr_exprs=['sum_c=sum(c)/log_b;cnt_d=count()']
     ... )
     >>> print re.sub('([{};])', r'\1\n', str(awk))  # doctest: +NORMALIZE_WHITESPACE
-    BEGIN{
+    {
+        __var__0=(2**int(log($2)));
+    }
+    __key__0!=$1||__key__1!=$2||__key__2!=__var__0{
+        if(NR>1)print __key__0,__key__1,__key__2,__aggr__1,__aggr__2;
+        __key__0=$1;
+        __key__1=$2;
+        __key__2=__var__0;
         __aggr__0=0;
         __aggr__2=0;
     }
     {
-        __var__0=(2**int(log($2)));
-        if(NR>1&&__key__0!=$1&&__key__1!=$2&&__key__2!=__var__0){
-            print $1,$2,__var__0,__aggr__1,__aggr__2;
-            __aggr__0=0;
-            __aggr__2=0;
-        }
         __aggr__0+=$3;
         __aggr__2++;
         __aggr__1=(__aggr__0/__var__0);
-        __key__0=$1;
-        __key__1=$2;
-        __key__2=__var__0;
     }
     END{
-        print $1,$2,__var__0,__aggr__1,__aggr__2;
+        print __key__0,__key__1,__key__2,__aggr__1,__aggr__2;
     }
     >>> str(output_data_desc)
     '# new_a\tb\tlog_b:int\tsum_c:float\tcnt_d:int'
