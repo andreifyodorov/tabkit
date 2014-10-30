@@ -196,20 +196,19 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     {
         __var__0=(2**int(log($2)));
         if(NR>1&&__key__0!=$1&&__key__1!=$2&&__key__2!=__var__0){
-            print $1,$2,__var__0,__aggr__1,__aggr__3;
+            print $1,$2,__var__0,__aggr__1,__aggr__2;
             __aggr__0=0;
             __aggr__2=0;
         }
         __aggr__0+=$3;
         __aggr__2++;
         __aggr__1=(__aggr__0/__var__0);
-        __aggr__3=__aggr__2;
         __key__0=$1;
         __key__1=$2;
         __key__2=__var__0;
     }
     END{
-        print $1,$2,__var__0,__aggr__1,__aggr__3;
+        print $1,$2,__var__0,__aggr__1,__aggr__2;
     }
     >>> str(output_data_desc)
     '# new_a\tb\tlog_b:int\tsum_c:float\tcnt_d:int'
@@ -267,7 +266,7 @@ class Expression(Statement):
         self.children = children
 
 
-class ColumnExpression(Expression):
+class SimpleExpression(Expression):
     """ Simple column expression like '$1' """
     pass
 
@@ -338,8 +337,11 @@ class AwkNodeVisitor(ast.NodeVisitor):
     def visit_Call(self, node):
         if node.keywords or node.kwargs or node.starargs:
             raise TabkitException("Syntax error: only positional arguments to functions allowed")
-        if node.func.id not in self.funcs:
-            raise TabkitException("Syntax error: unknown function '%s'" % (func,))
+        if node.func.id in self.funcs:
+            return self.visit_Function(node)
+        raise TabkitException("Syntax error: unknown function '%s'" % node.func.id)
+
+    def visit_Function(self, node):
         return [self.visit(arg) for arg in node.args]
 
     def visit_Expr(self, node):
@@ -409,10 +411,9 @@ class AwkGenerator(AwkNodeVisitor):
             type=str
         )
 
-    def visit_Call(self, node):
-        func_name = node.func.id
-        func = self.funcs[func_name]
-        args = super(AwkGenerator, self).visit_Call(node)
+    def visit_Function(self, node):
+        func = self.funcs[node.func.id]
+        args = super(AwkGenerator, self).visit_Function(node)
         return Expression(
             code=func.code(args),
             type=func.type,
@@ -422,7 +423,7 @@ class AwkGenerator(AwkNodeVisitor):
     def visit_Name(self, node):
         if node.id in self.data_desc:
             field_index = self.data_desc.index(node.id)
-            return ColumnExpression(
+            return SimpleExpression(
                 code="$%d" % (field_index + 1,),
                 type=self.data_desc.fields[field_index].type)
 
@@ -444,6 +445,33 @@ class OutputAwkGenerator(AwkGenerator):
     def output_data_desc(self):
         return DataDesc((name, self.context[name].type) for name in self.output)
 
+    def visit_Assign(self, node):
+        if len(node.targets) != 1:
+            raise TabkitException('Syntax error: multiple targets are not allowed in assignment')
+
+        target_name = node.targets[0].id
+        value = self.visit(node.value)
+
+        if target_name in self.context:
+            target_var_name = self.context[target_name].code
+        else:
+            if not target_name.startswith("_"):
+                self.output.append(target_name)
+            if isinstance(value, SimpleExpression):
+                self.context[target_name] = value
+                return None
+            target_var_name = self._new_var()
+
+        assign_expr = Expression(
+            code=target_var_name,
+            type=value.type,
+            children=[value])
+        self.context[target_name] = assign_expr
+
+        return Assignment(
+            code="%s=%s" % (assign_expr.code, value.code),
+            value=value)
+
     def visit_Module(self, node):
         code = list()
         for stmt in node.body:
@@ -459,42 +487,13 @@ class OutputAwkGenerator(AwkGenerator):
                         self.output.append(field_name)
                     continue
 
-            expr = self.visit(stmt)
-            if expr is None:
+            assign = self.visit(stmt)
+            if assign is None:
                 continue
-            if not isinstance(expr, Assignment):
+            if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements or field names expected')
-
-            code.append(expr.code)
-
+            code.append(assign.code)
         return code
-
-    def visit_Assign(self, node):
-        if len(node.targets) != 1:
-            raise TabkitException('Syntax error: multiple targets are not allowed in assignment')
-
-        target_name = node.targets[0].id
-        value = self.visit(node.value)
-
-        if target_name in self.context:
-            target_var_name = self.context[target_name].code
-        else:
-            if not target_name.startswith("_"):
-                self.output.append(target_name)
-            if isinstance(value, ColumnExpression):
-                self.context[target_name] = value
-                return None
-            target_var_name = self._new_var()
-
-        assign_expr = Expression(
-            code=target_var_name,
-            type=value.type,
-            children=[value])
-        self.context[target_name] = assign_expr
-
-        return Assignment(
-            code="%s=%s" % (assign_expr.code, value.code),
-            value=value)
 
 
 class ConditionAwkGenerator(AwkGenerator):
@@ -509,6 +508,10 @@ class AggregatedExpression(Expression):
     @classmethod
     def from_expression(cls, expr):
         return cls(code=expr.code, type=expr.type, children=expr.children)
+
+
+class SimpleAggregatedExpressions(AggregatedExpression, SimpleExpression):
+    pass
 
 
 class AggregateFunction(object):
@@ -532,6 +535,7 @@ class SumFunction(AggregateFunction):
 
     def __init__(self, var_name, arg):
         super(SumFunction, self).__init__(var_name, arg)
+        self.type = arg.type
 
 
 class CountFunction(AggregateFunction):
@@ -539,15 +543,30 @@ class CountFunction(AggregateFunction):
 
     def __init__(self, var_name):
         super(CountFunction, self).__init__(var_name)
+        self.type = TabkitTypes.int
 
 
-class AggregateAwkGenerator(OutputAwkGenerator):
-    var_name_template = "__aggr__%x"
-
+class AggregateAwkNodeVisitor(AwkNodeVisitor):
     aggregate_funcs = {
         'sum': SumFunction,
         'count': CountFunction
     }
+
+    def visit_Call(self, node):
+        if node.keywords or node.kwargs or node.starargs:
+            raise TabkitException("Syntax error: only positional arguments to functions allowed")
+        if node.func.id in self.funcs:
+            return self.visit_Function(node)
+        if node.func.id in self.aggregate_funcs:
+            return self.visit_AggregateFunction(node)
+        raise TabkitException("Syntax error: unknown function '%s'" % node.func.id)
+
+    def visit_AggregateFunction(self, node):
+        return [self.visit(arg) for arg in node.args]
+
+
+class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
+    var_name_template = "__aggr__%x"
 
     def __init__(self, data_desc, context=None, group_context=None):
         super(AggregateAwkGenerator, self).__init__(data_desc, context)
@@ -567,20 +586,16 @@ class AggregateAwkGenerator(OutputAwkGenerator):
             return AggregatedExpression.from_expression(expr)
         return expr
 
-    def visit_Call(self, node):
-        func = node.func.id
-        if node.keywords or node.kwargs or node.starargs:
-            raise TabkitException("Syntax error: only positional arguments to functions allowed")
-        if func in self.aggregate_funcs:
-            var_name = self._new_var()
-            args = [self.visit(arg) for arg in node.args]
-            self.aggregators.append(self.aggregate_funcs[func](var_name, *args))
-            return AggregatedExpression(
-                code=var_name,
-                type=int,
-                children=args
-            )
-        return super(AggregateAwkGenerator, self).visit_Call(node)
+    def visit_AggregateFunction(self, node):
+        var_name = self._new_var()
+        args = super(AggregateAwkGenerator, self).visit_AggregateFunction(node)
+        func = self.aggregate_funcs[node.func.id](var_name, *args)
+        self.aggregators.append(func)
+        return SimpleAggregatedExpressions(
+            code=var_name,
+            type=func.type,
+            children=args
+        )
 
     def visit_Num(self, node):
         return AggregatedExpression.from_expression(
@@ -603,6 +618,8 @@ class AggregateAwkGenerator(OutputAwkGenerator):
         code = list()
         for stmt in node.body:
             assign = self.visit(stmt)
+            if assign is None:
+                continue
             if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements expected')
             if not isinstance(assign.value, AggregatedExpression):
