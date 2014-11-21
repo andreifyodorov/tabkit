@@ -22,9 +22,9 @@ class MapProgram(object):
 
     {
         row_exprs;
-        if (output_cond) {
-            print output;
-        }
+    }
+    output_cond {
+        print output;
     }
 
     >>> str(MapProgram(output=['a', 'b']) + MapProgram(output=['c', 'd']))
@@ -47,7 +47,9 @@ class MapProgram(object):
             row_exprs = "{%s}" % row_exprs
         output_cond = "&&".join(self.output_cond)
         output_exprs = ",".join(self.output)
-        return "%s%s{print %s;}" % (row_exprs, output_cond, output_exprs)
+        if output_exprs:
+            output_exprs = "{print %s;}" % output_exprs
+        return "%s%s%s" % (row_exprs, output_cond, output_exprs)
 
 
 def map_program(data_desc, output_exprs, filter_exprs=None):
@@ -601,6 +603,7 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
 
     def visit_Module(self, node):
         code = list()
+        last_aggr_index = len(self.aggregators)  # i don't like this solution
         for stmt in node.body:
             assign = self.visit(stmt)
             if assign is None:
@@ -611,7 +614,7 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
                 raise TabkitException(
                     "Syntax error: need aggregate function")
             code.append(assign.code)
-        return [aggr.code for aggr in self.aggregators] + code
+        return [aggr.code for aggr in self.aggregators[last_aggr_index:]] + code
 
 
 if __name__ == "__main__":
