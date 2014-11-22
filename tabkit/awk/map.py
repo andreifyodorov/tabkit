@@ -66,13 +66,15 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
         __var__2=($1*3);
         __var__3=(__var__2/3);
         __var__1=($1+1);
+        __var__0=$1;
+        __var__1=$2;
     }
     (__var__3==($1*$4)||__var__3==($4*$1))&&__var__2>=__var__3{
         print __var__0,__var__1,__var__3,$1,$3,$4;
     }
 
     >>> str(output_data_desc)
-    '# a:int\tb:int\tnew:float\ta2\tc\td'
+    '# a\tb\tnew:float\ta2\tc\td'
     '''
     filter_exprs = filter_exprs or list()
 
@@ -336,17 +338,9 @@ class OutputAwkGenerator(AwkGenerator):
     def visit_Module(self, node):
         code = list()
         for stmt in node.body:
-            # special case, no calculations, only output
+            # syntactic sugar, no assignment, just mention var name
             if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Name)):
-                field_name = stmt.value.id
-                if field_name in self.data_desc:
-                    if field_name not in self.context:
-                        self.context[field_name] = Expression(
-                            code="$%d" % (self.data_desc.index(field_name) + 1),
-                            type=self.data_desc.get_field(field_name).type
-                        )
-                        self.output.append(field_name)
-                    continue
+                stmt = ast.Assign(targets=[stmt.value], value=stmt.value)
 
             assign = self.visit(stmt)
             if not isinstance(assign, Assignment):
