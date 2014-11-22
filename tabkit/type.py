@@ -1,5 +1,6 @@
-from exception import TabkitException
 from collections import namedtuple
+
+from .exception import TabkitException
 
 
 def parse_boolean(x=None):

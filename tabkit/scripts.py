@@ -2,11 +2,11 @@ import sys
 import argparse
 from itertools import islice, izip, izip_longest, tee, chain
 
-from awk import map_program
-from header import Field, DataDesc, OrderField, parse_order
-from exception import TabkitException, decorate_exceptions
-from type import generic_type, narrowest_type
-from utils import Files, xsplit
+from .awk import map_program
+from .header import Field, DataDesc, OrderField, parse_order
+from .exception import TabkitException, decorate_exceptions
+from .type import generic_type, narrowest_type
+from .utils import Files, xsplit
 
 
 def add_common_args(parser):
@@ -65,11 +65,11 @@ def cut():
 
     field_indices = (data_desc.index(field) for field in fields)
     options = ['-f']
-    options.append(",".join(str(index+1) for index in field_indices))
+    options.append(",".join(str(index + 1) for index in field_indices))
 
     order = []
     for order_key in data_desc.order:
-        if not order_key.name in fields:
+        if order_key.name not in fields:
             break
         order.append(order_key)
 
@@ -247,7 +247,7 @@ def join():
                 "File %r must be sorted lexicographicaly ascending by the field %r" %
                 (file.name, key))
         if not args.output:
-            if args.only_unpairable and not fileno in args.only_unpairable:
+            if args.only_unpairable and fileno not in args.only_unpairable:
                 continue
             for fieldno, field in enumerate(desc, start=1):
                 if field.name == key:

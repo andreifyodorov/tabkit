@@ -5,9 +5,9 @@ import logging
 from pipes import quote
 from itertools import izip, chain
 
-from type import type_name
-from header import parse_header, generic_data_desc
-from exception import TabkitException
+from .type import type_name
+from .header import parse_header, generic_data_desc
+from .exception import TabkitException
 
 
 class File(object):

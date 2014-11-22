@@ -1,8 +1,8 @@
 import re
 from collections import namedtuple
 
-from type import parse_type, type_name, generic_type
-from exception import TabkitException
+from .type import parse_type, type_name, generic_type
+from .exception import TabkitException
 
 
 class Field(namedtuple('Field', 'name type')):
