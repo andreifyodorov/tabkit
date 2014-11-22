@@ -116,6 +116,11 @@ class Assignment(Statement):
         self.value = value
 
 
+class OmittedAssignment(Assignment):
+    def __init__(self, value, children=None):
+        super(OmittedAssignment, self).__init__(None, value, children)
+
+
 class Expression(Statement):
     def __init__(self, code, type, children=None):
         super(Expression, self).__init__(code, children)
@@ -281,7 +286,7 @@ class AwkGenerator(AwkNodeVisitor):
         if node.id in self.data_desc:
             field_index = self.data_desc.index(node.id)
             return SimpleExpression(
-                code="$%d" % (field_index + 1,),
+                code="$%d" % (field_index + 1),
                 type=self.data_desc.fields[field_index].type)
 
         if node.id in self.context:
@@ -291,7 +296,6 @@ class AwkGenerator(AwkNodeVisitor):
 
 
 class OutputAwkGenerator(AwkGenerator):
-
     def __init__(self, data_desc, context=None):
         self.output = list()
         super(OutputAwkGenerator, self).__init__(data_desc, context)
@@ -316,7 +320,7 @@ class OutputAwkGenerator(AwkGenerator):
                 self.output.append(target_name)
             if isinstance(value, SimpleExpression):
                 self.context[target_name] = value
-                return None
+                return OmittedAssignment(value)
             target_var_name = self._new_var()
 
         assign_expr = Expression(
@@ -345,11 +349,10 @@ class OutputAwkGenerator(AwkGenerator):
                     continue
 
             assign = self.visit(stmt)
-            if assign is None:
-                continue
             if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements or field names expected')
-            code.append(assign.code)
+            if not isinstance(assign, OmittedAssignment):
+                code.append(assign.code)
         return code
 
 

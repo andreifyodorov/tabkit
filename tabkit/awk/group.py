@@ -1,8 +1,9 @@
 import ast
 import sys
+from itertools import chain
 
 from .map import (
-    _join_exprs, Statement, Assignment, Expression, SimpleExpression,
+    _join_exprs, Statement, Assignment, OmittedAssignment, Expression, SimpleExpression,
     AwkNodeVisitor, OutputAwkGenerator
 )
 from ..exception import TabkitException
@@ -75,7 +76,7 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     >>> awk, output_data_desc = grp_program(
     ...     data_desc,
     ...     grp_exprs=['new_a=a;b;log_b=2**int(log(b))'],
-    ...     aggr_exprs=['sum_c=sum(c)/log_b;cnt_d=count()']
+    ...     aggr_exprs=['sum_c=sum(c)/log_b', 'cnt_d=count()']
     ... )
     >>> print re.sub('([{};])', r'\1\n', str(awk))  # doctest: +NORMALIZE_WHITESPACE
     {
@@ -91,8 +92,8 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     }
     {
         __aggr__0+=$3;
-        __aggr__2++;
         __aggr__1=(__aggr__0/__var__0);
+        __aggr__2++;
     }
     END{
         print __key__0,__key__1,__key__2,__aggr__1,__aggr__2;
@@ -135,6 +136,19 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
 
 
 class AggregateExpression(Expression):
+    def __init__(self, code, type, children=None, aggregators=None):
+        combined_aggregators = []
+        if children:
+            combined_aggregators.append(
+                chain.from_iterable(
+                    child.aggregators for child in children
+                    if isinstance(child, AggregateExpression))
+            )
+        if aggregators:
+            combined_aggregators.append(aggregators)
+        self.aggregators = chain.from_iterable(combined_aggregators)
+        super(AggregateExpression, self).__init__(code, type, children)
+
     @classmethod
     def from_expression(cls, expr):
         return cls(code=expr.code, type=expr.type, children=expr.children)
@@ -220,11 +234,11 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
         var_name = self._new_var()
         args = super(AggregateAwkGenerator, self).visit_AggregateFunction(node)
         func = self.aggregate_funcs[node.func.id](var_name, *args)
-        self.aggregators.append(func)
         return SimpleAggregateExpressions(
             code=var_name,
             type=func.type,
-            children=args
+            children=args,
+            aggregators=[func]
         )
 
     def visit_Num(self, node):
@@ -246,15 +260,15 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
 
     def visit_Module(self, node):
         code = list()
-        last_aggr_index = len(self.aggregators)  # i don't like this solution
         for stmt in node.body:
             assign = self.visit(stmt)
-            if assign is None:
-                continue
+            if not isinstance(assign.value, AggregateExpression):
+                raise TabkitException('Syntax error: need aggregate function')
             if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements expected')
-            if not isinstance(assign.value, AggregateExpression):
-                raise TabkitException(
-                    "Syntax error: need aggregate function")
-            code.append(assign.code)
-        return [aggr.code for aggr in self.aggregators[last_aggr_index:]] + code
+            for aggr in assign.value.aggregators:
+                self.aggregators.append(aggr)
+                code.append(aggr.code)
+            if not isinstance(assign, OmittedAssignment):
+                code.append(assign.code)
+        return code
