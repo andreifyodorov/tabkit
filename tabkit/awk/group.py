@@ -26,11 +26,11 @@ class GrpProgram(object):
         aggr_exprs;
     }
     END {
-        print grp_ouput, aggr_output;
+        if (NR>0) print grp_ouput, aggr_output;
     }
 
     >>> str(GrpProgram(grp_output=['a']) + GrpProgram(aggr_output=['c', 'd']))
-    '__key__0!=a{if(NR>1)print __key__0,c,d;__key__0=a;}END{print __key__0,c,d;}'
+    '__key__0!=a{if(NR>1)print __key__0,c,d;__key__0=a;}END{if(NR>0)print __key__0,c,d;}'
 
     """
     def __init__(self, init_aggr=None, grp_exprs=None, grp_output=None,
@@ -64,7 +64,7 @@ class GrpProgram(object):
         if aggr_exprs:
             aggr_exprs = "{%s}" % aggr_exprs
 
-        return "%s%s{if(NR>1)%s%s%s}%sEND{%s}" % (
+        return "%s%s{if(NR>1)%s%s%s}%sEND{if(NR>0)%s}" % (
             grp_exprs, key_cond, print_expr, key_exprs, init_aggr, aggr_exprs, print_expr)
 
 
@@ -96,7 +96,7 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
         __aggr__2++;
     }
     END{
-        print __key__0,__key__1,__key__2,__aggr__1,__aggr__2;
+        if(NR>0)print __key__0,__key__1,__key__2,__aggr__1,__aggr__2;
     }
     >>> str(output_data_desc)
     '# new_a\tb\tlog_b:int\tsum_c:float\tcnt_d:int'
