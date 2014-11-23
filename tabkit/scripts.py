@@ -97,22 +97,26 @@ def map():
                         help="Add all fields to output (implied without -o option)")
     parser.add_argument('-o', '--output', action="append", help="Output fields", default=[])
     parser.add_argument('-f', '--filter', action="append", help="Filter expression")
+    parser.add_argument('-v', '--verbose', action="store_true", help="Verbose awk code")
     add_common_args(parser)
 
     args = parser.parse_args()
     files = Files(args.files)
     data_desc = files.data_desc()
 
-    if args.all or not args.output:
-        args.output.extend(f.name for f in data_desc)
-
+    # if args.all or not args.output:
+    #     args.output.extend(f.name for f in data_desc)
+    #
     program, data_desc = map_program(data_desc, args.output, args.filter)
+
+    if args.verbose:
+        sys.stderr.write("%s\n" % program)
 
     if not args.no_header:
         sys.stdout.write("%s\n" % data_desc)
         sys.stdout.flush()
 
-    files.call(['awk', "-F", "\t", str(program)])
+    files.call(['awk', "-F", "\t", '-v', 'OFS=\t', str(program)])
 
 
 @decorate_exceptions
@@ -125,6 +129,7 @@ def group():
     parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
     parser.add_argument('-g', '--group', action="append", help="Group fields", default=[])
     parser.add_argument('-o', '--output', action="append", help="Output fields", default=[])
+    parser.add_argument('-v', '--verbose', action="store_true", help="Verbose awk code")
     add_common_args(parser)
 
     args = parser.parse_args()
@@ -138,11 +143,14 @@ def group():
 
     program, data_desc = grp_program(data_desc, args.group, args.output)
 
+    if args.verbose:
+        sys.stderr.write("%s\n" % program)
+
     if not args.no_header:
         sys.stdout.write("%s\n" % data_desc)
         sys.stdout.flush()
 
-    files.call(['awk', "-F", "\t", str(program)])
+    files.call(['awk', "-F", "\t", '-v', 'OFS=\t', str(program)])
 
 
 def make_order(keys):

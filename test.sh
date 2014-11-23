@@ -215,12 +215,62 @@ EOCASE) || failed grp_no_aggr
 # grp_implicit_group
 
 diff -b <(
-    echo -e "# a, b\n1\t3\n2\t4\n3\t5\n" | run group -o 'x=sum(a)/sum(b)'
-) <(cat <<EOCASE
+cat <<EOINPUT | run group -o 'x=sum(a)/sum(b)'
+# a, b
+1	3
+2	4
+3	5
+EOINPUT) <(cat <<EOCASE
 # x:float
 0.5
 EOCASE) || failed grp_implicit_group
 
+
+# grp_explicit_group
+
+diff -b <(
+cat <<EOINPUT | run group -g a -o 'x=sum(b)'
+# a, b:int
+1	1
+2	2
+2	3
+3	5
+EOINPUT) <(cat <<EOCASE
+# a	x:int
+1	1
+2	5
+3	5
+EOCASE) || failed grp_explicit_group
+
+
+# grp_mixed_group
+
+diff -b <(
+cat <<EOINPUT | run group -g "a;_hidden=b" -o 'x=sum(c)'
+# a, b, c:int
+1	1	2
+1	1	3
+1	2	4
+2	2	1
+2	2	2
+3	5	3
+EOINPUT) <(cat <<EOCASE
+# a	x:int
+1	5
+1	4
+2	3
+3	3
+EOCASE) || failed grp_mixed_group
+
+
+# grp_count
+
+diff -b <(
+    echo -e "# a\n1\n2\n3\n4\n5" | run group -o 'cnt=count()'
+) <(cat <<EOCASE
+# cnt:int
+5
+EOCASE) || failed grp_count
 
 
 ###### tsrt
@@ -338,7 +388,7 @@ diff -b <(
 EOCASE) || failed join_a_generic_key
 
 
-# join_v
+# join_v1
 diff -b <(
     python -mtabkit.scripts join -1 id -2 ID -v1 <(
         echo -e "# id:int, fruit # ORDER: id, fruit\n1\tapple\n1\tpomegranate\n2\torange\n3\tcucumber"

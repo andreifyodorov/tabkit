@@ -104,7 +104,7 @@ def map_program(data_desc, output_exprs, filter_exprs=None):
     except TabkitException as e:
         raise TabkitException("%s in filter expressions" % e)
 
-    return program, output.output_data_desc()
+    return program, output.output_data_desc() if output_exprs else data_desc
 
 
 class Statement(object):
