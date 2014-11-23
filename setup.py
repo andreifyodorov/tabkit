@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="tabkit",
-    version="0.9",
+    version="0.10",
     packages=find_packages(),
     entry_points={
         "console_scripts": [
@@ -13,6 +13,7 @@ setup(
             'tsrt = tabkit.scripts:sort',
             'tjoin = tabkit.scripts:join',
             'tmap_awk = tabkit.scripts:map',
+            'tgrp_awk = tabkit.scripts:group',
             'tpretty = tabkit.scripts:pretty'
         ]
     },
