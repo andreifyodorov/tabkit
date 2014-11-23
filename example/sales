@@ -1,0 +1,10 @@
+# fruit	qty:int	paid:bool
+apple	10	1
+apple	7	0
+apple	1	1
+orange	3	1
+orange	18	1
+orange	4	0
+orange	2	1
+kumquat	1	1
+kumquat	2	1

@@ -1,8 +1,49 @@
 tabkit
 ======
 
-Coreutils-like kit for headed tab-separated files
+A CLI TSV MR kit (a command-line interface tab-separated values map-reduce kit).
+Powered by coreutils.
 
+
+Overview
+--------
+
+::
+
+	$ cat fruits | tpretty
+
+	 fruit   | price:float
+	---------+-------------
+	 apple   | 1.04
+	 kumquat | 4.99
+	 orange  | 2.07
+
+	$ cat sales | tpretty
+
+	 fruit   | qty:int | paid:bool
+	---------+---------+-----------
+	 apple   | 10      | 1
+	 apple   | 7       | 0
+	 apple   | 1       | 1
+	 orange  | 3       | 1
+	 orange  | 18      | 1
+	 orange  | 4       | 0
+	 orange  | 2       | 1
+	 kumquat | 1       | 1
+	 kumquat | 2       | 1
+
+	$ cat sales \
+		| tmap_awk -f paid \
+		| tsrt -k fruit \
+		| tjoin -j fruit - fruits \
+		| tgrp_awk -g fruit -o "sum_qty=sum(qty)" -o "sum_paid=sum(qty*price)" \
+		| tpretty
+
+	 fruit   | sum_qty:int | sum_paid:float
+	---------+-------------+----------------
+	 apple   | 11          | 11.44
+	 kumquat | 3           | 14.97
+	 orange  | 23          | 47.61
 
 tcat
 ----
