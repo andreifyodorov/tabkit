@@ -201,6 +201,28 @@ diff -b <(
 EOCASE) || failed map_log_exp
 
 
+###### tgrp_awk
+
+# grp_no_aggr
+
+diff -b <(
+    echo -e "# a, b" | run group -o 'x=a;y=b' 2>&1
+) <(cat <<EOCASE
+group: Syntax error: need aggregate function in aggregate expressions
+EOCASE) || failed grp_no_aggr
+
+
+# grp_implicit_group
+
+diff -b <(
+    echo -e "# a, b\n1\t3\n2\t4\n3\t5\n" | run group -o 'x=sum(a)/sum(b)'
+) <(cat <<EOCASE
+# x:float
+0.5
+EOCASE) || failed grp_implicit_group
+
+
+
 ###### tsrt
 
 # sort_num

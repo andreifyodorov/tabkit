@@ -1,6 +1,7 @@
 import ast
 import sys
 from itertools import chain, count
+from collections import OrderedDict
 
 from ..exception import TabkitException
 from ..header import DataDesc
@@ -227,7 +228,7 @@ class AwkNodeVisitor(ast.NodeVisitor):
 class AwkGenerator(AwkNodeVisitor):
     def __init__(self, data_desc, context=None):
         self.data_desc = data_desc
-        self.context = context or dict()
+        self.context = context or OrderedDict()
         self.var_count = count()
         super(AwkGenerator, self).__init__()
 
@@ -299,14 +300,17 @@ class AwkGenerator(AwkNodeVisitor):
 
 class OutputAwkGenerator(AwkGenerator):
     def __init__(self, data_desc, context=None):
-        self.output = list()
+        self.output = set()
         super(OutputAwkGenerator, self).__init__(data_desc, context)
 
+    def output_context(self):
+        return ((name, expr) for name, expr in self.context.iteritems() if name in self.output)
+
     def output_code(self):
-        return (self.context[name].code for name in self.output)
+        return (expr.code for name, expr in self.output_context())
 
     def output_data_desc(self):
-        return DataDesc((name, self.context[name].type) for name in self.output)
+        return DataDesc((name, expr.type) for name, expr in self.output_context())
 
     def visit_Assign(self, node):
         if len(node.targets) != 1:
@@ -319,7 +323,7 @@ class OutputAwkGenerator(AwkGenerator):
             target_var_name = self.context[target_name].code
         else:
             if not target_name.startswith("_"):
-                self.output.append(target_name)
+                self.output.add(target_name)
             if isinstance(value, SimpleExpression):
                 self.context[target_name] = value
                 return OmittedAssignment(value)

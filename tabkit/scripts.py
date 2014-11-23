@@ -2,7 +2,7 @@ import sys
 import argparse
 from itertools import islice, izip, izip_longest, tee, chain
 
-from .awk import map_program
+from .awk import map_program, grp_program
 from .header import Field, DataDesc, OrderField, parse_order
 from .exception import TabkitException, decorate_exceptions
 from .type import generic_type, narrowest_type
@@ -31,7 +31,7 @@ def cat():
     data_desc = files.data_desc()
 
     if not args.no_header:
-        sys.stdout.write(str(data_desc) + "\n")
+        sys.stdout.write("%s\n" % data_desc)
         sys.stdout.flush()
 
     files.call(['cat'])
@@ -79,7 +79,7 @@ def cut():
     )
 
     if not args.no_header:
-        sys.stdout.write(str(data_desc) + "\n")
+        sys.stdout.write("%s\n" % data_desc)
         sys.stdout.flush()
 
     files.call(['cut'] + options)
@@ -89,7 +89,8 @@ def cut():
 def map():
     parser = argparse.ArgumentParser(
         add_help=True,
-        description="Perform a map operation on the input"
+        description="Perform a map operation on all FILE(s)"
+                    "and write result to standard output."
     )
     parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
     parser.add_argument('-a', '--all', action="store_true",
@@ -108,7 +109,37 @@ def map():
     program, data_desc = map_program(data_desc, args.output, args.filter)
 
     if not args.no_header:
-        sys.stdout.write(str(data_desc) + "\n")
+        sys.stdout.write("%s\n" % data_desc)
+        sys.stdout.flush()
+
+    files.call(['awk', "-F", "\t", str(program)])
+
+
+@decorate_exceptions
+def group():
+    parser = argparse.ArgumentParser(
+        add_help=True,
+        description="Perform a group operation on all FILE(s)"
+                    "and write result to standard output."
+    )
+    parser.add_argument('files', metavar='FILE', type=argparse.FileType('r'), nargs="*")
+    parser.add_argument('-g', '--group', action="append", help="Group fields", default=[])
+    parser.add_argument('-o', '--output', action="append", help="Output fields", default=[])
+    add_common_args(parser)
+
+    args = parser.parse_args()
+    files = Files(args.files)
+    data_desc = files.data_desc()
+
+    if not args.group:
+        args.group = ["_fake_implicit_group=1"]
+    if args.output:
+        TabkitException("You must specify list of output field")
+
+    program, data_desc = grp_program(data_desc, args.group, args.output)
+
+    if not args.no_header:
+        sys.stdout.write("%s\n" % data_desc)
         sys.stdout.flush()
 
     files.call(['awk', "-F", "\t", str(program)])
@@ -152,7 +183,7 @@ def sort():
         options.append(option)
 
     if not args.no_header:
-        sys.stdout.write(str(data_desc) + "\n")
+        sys.stdout.write("%s\n" % data_desc)
         sys.stdout.flush()
 
     files.call(['sort'] + options)
@@ -311,7 +342,7 @@ def join():
     options.extend(['-o', ','.join(output)])
 
     if not args.no_header:
-        sys.stdout.write(str(output_desc) + "\n")
+        sys.stdout.write("%s\n" % output_desc)
         sys.stdout.flush()
 
     files.call(['join', '-t', "\t"] + options)

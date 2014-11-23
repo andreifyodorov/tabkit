@@ -1,6 +1,7 @@
 import ast
 import sys
 from itertools import chain
+from collections import OrderedDict
 
 from .map import (
     _join_exprs, Statement, Assignment, OmittedAssignment, Expression, SimpleExpression,
@@ -29,13 +30,14 @@ class GrpProgram(object):
         if (NR>0) print grp_ouput, aggr_output;
     }
 
-    >>> str(GrpProgram(grp_output=['a']) + GrpProgram(aggr_output=['c', 'd']))
+    >>> str(GrpProgram(grp_keys=['a'], grp_output=['a']) + GrpProgram(aggr_output=['c', 'd']))
     '__key__0!=a{if(NR>1)print __key__0,c,d;__key__0=a;}END{if(NR>0)print __key__0,c,d;}'
 
     """
-    def __init__(self, init_aggr=None, grp_exprs=None, grp_output=None,
+    def __init__(self, init_aggr=None, grp_keys=None, grp_exprs=None, grp_output=None,
                  aggr_exprs=None, aggr_output=None):
         self.init_aggr = init_aggr or []
+        self.grp_keys = grp_keys or []
         self.grp_exprs = grp_exprs or []
         self.grp_output = grp_output or []
         self.aggr_exprs = aggr_exprs or []
@@ -43,6 +45,7 @@ class GrpProgram(object):
 
     def __add__(self, other):
         return GrpProgram(self.init_aggr + other.init_aggr,
+                          self.grp_keys + other.grp_keys,
                           self.grp_exprs + other.grp_exprs,
                           self.grp_output + other.grp_output,
                           self.aggr_exprs + other.aggr_exprs,
@@ -53,11 +56,11 @@ class GrpProgram(object):
         if grp_exprs:
             grp_exprs = "{%s}" % grp_exprs
 
-        keys = [("__key__%x" % n, expr) for n, expr in enumerate(self.grp_output)]
-        print_exprs = [var for (var, expr) in keys] + self.aggr_output
+        keys = OrderedDict((expr, "__key__%x" % n) for n, expr in enumerate(self.grp_keys))
+        print_exprs = [keys[expr] for expr in self.grp_output] + self.aggr_output
         print_expr = "print %s;" % ",".join(expr for expr in print_exprs)
-        key_cond = "%s" % "||".join("%s!=%s" % (var, expr) for var, expr in keys)
-        key_exprs = _join_exprs("%s=%s" % (var, expr) for var, expr in keys)
+        key_cond = "%s" % "||".join("%s!=%s" % (var, expr) for expr, var in keys.iteritems())
+        key_exprs = _join_exprs("%s=%s" % (var, expr) for expr, var in keys.iteritems())
 
         init_aggr = _join_exprs(self.init_aggr)
         aggr_exprs = _join_exprs(self.aggr_exprs)
@@ -106,7 +109,7 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     program = GrpProgram()
 
     try:
-        group = OutputAwkGenerator(data_desc)
+        group = GroupKeysAwkGenerator(data_desc)
         for grp_expr in grp_exprs:
             try:
                 tree = ast.parse(grp_expr)
@@ -115,6 +118,7 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
             program.grp_exprs.extend(group.visit(tree))
     except TabkitException as e:
         raise TabkitException("%s in group expressions" % e)
+    program.grp_keys.extend(group.group_keys())
     program.grp_output.extend(group.output_code())
 
     try:
@@ -133,6 +137,11 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     output_data_desc = group.output_data_desc() + aggr.output_data_desc()
 
     return program, output_data_desc
+
+
+class GroupKeysAwkGenerator(OutputAwkGenerator):
+    def group_keys(self):
+        return (expr.code for name, expr in self.context.iteritems())
 
 
 class AggregateExpression(Expression):
@@ -262,10 +271,10 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
         code = list()
         for stmt in node.body:
             assign = self.visit(stmt)
-            if not isinstance(assign.value, AggregateExpression):
-                raise TabkitException('Syntax error: need aggregate function')
             if not isinstance(assign, Assignment):
                 raise TabkitException('Syntax error: assign statements expected')
+            if not isinstance(assign.value, AggregateExpression):
+                raise TabkitException('Syntax error: need aggregate function')
             for aggr in assign.value.aggregators:
                 self.aggregators.append(aggr)
                 code.append(aggr.code)
