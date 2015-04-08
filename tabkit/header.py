@@ -1,13 +1,13 @@
 import re
 from collections import namedtuple
 
-from .type import parse_type, type_name, generic_type
+from .type import TabkitTypes, parse_type, type_name, generic_type
 from .exception import TabkitException
 
 
 class Field(namedtuple('Field', 'name type')):
     def __str__(self):
-        if self.type == str:
+        if self.type == TabkitTypes.str:
             return self.name
         else:
             return "%s:%s" % (self.name, type_name(self.type))

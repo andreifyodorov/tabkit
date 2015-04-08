@@ -46,9 +46,10 @@ class StreamFile(File):
 def file_obj(fd):
     try:
         fd.tell()
-        return RegularFile(fd)
     except IOError:
         return StreamFile(fd)
+    else:
+        return RegularFile(fd)
 
 
 class Files(object):
