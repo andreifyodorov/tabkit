@@ -263,6 +263,25 @@ EOINPUT) <(cat <<EOCASE
 EOCASE) || failed grp_mixed_group
 
 
+# grp_group_concat
+
+diff -b <(
+cat <<EOINPUT | run group -g "a" -o 'x=group_concat(b)'
+# a, b
+1	apple
+1	orange
+1	kumquat
+2	red
+2	blue
+3	foobar
+EOINPUT) <(cat <<EOCASE
+# a	x
+1	apple, orange, kumquat
+2	red, blue
+3	foobar
+EOCASE) || failed grp_group_concat
+
+
 # grp_count
 
 diff -b <(

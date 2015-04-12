@@ -168,23 +168,24 @@ class SimpleAggregateExpressions(AggregateExpression, SimpleExpression):
 
 
 class AggregateFunction(object):
-    init_code_template = "%s=0"
+    init_code_template = "{var_name}=0"
 
-    def __init__(self, var_name, *args):
+    def __init__(self, var_name, *args, **kwargs):
         self.var_name = var_name
         self.args = tuple(arg.code for arg in args)
+        self.kwargs = kwargs
 
     @property
     def init_code(self):
-        return self.init_code_template % self.var_name
+        return self.init_code_template.format(var_name=self.var_name, **self.kwargs)
 
     @property
     def code(self):
-        return self.code_template % ((self.var_name,) + self.args)
+        return self.code_template.format(*self.args, var_name=self.var_name, **self.kwargs)
 
 
 class SumFunction(AggregateFunction):
-    code_template = "%s+=%s"
+    code_template = "{var_name}+={0}"
 
     def __init__(self, var_name, arg):
         super(SumFunction, self).__init__(var_name, arg)
@@ -192,17 +193,30 @@ class SumFunction(AggregateFunction):
 
 
 class CountFunction(AggregateFunction):
-    code_template = "%s++"
+    code_template = "{var_name}++"
 
     def __init__(self, var_name):
         super(CountFunction, self).__init__(var_name)
         self.type = TabkitTypes.int
 
 
+class GroupConcatFunction(AggregateFunction):
+    init_code_template = '{var_name}=""'
+    code_template = '{var_name} = {var_name} ({var_name}?{delimeter}:""){0}'
+
+    def __init__(self, var_name, arg, delimeter=None):
+        if delimeter is None:
+            delimeter = ", "
+        delimeter = '"%s"' % delimeter.replace('"', '\\"')
+        super(GroupConcatFunction, self).__init__(var_name, arg, delimeter=delimeter)
+        self.type = TabkitTypes.str
+
+
 class AggregateAwkNodeVisitor(AwkNodeVisitor):
     aggregate_funcs = {
         'sum': SumFunction,
-        'count': CountFunction
+        'count': CountFunction,
+        'group_concat': GroupConcatFunction
     }
 
     def visit_Call(self, node):
