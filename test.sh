@@ -231,12 +231,14 @@ EOCASE) || failed grp_implicit_group
 diff -b <(
 cat <<EOINPUT | run group -g a -o 'x=sum(b)'
 # a, b:int
+0	0
 1	1
 2	2
 2	3
 3	5
 EOINPUT) <(cat <<EOCASE
 # a	x:int
+0	0
 1	1
 2	5
 3	5

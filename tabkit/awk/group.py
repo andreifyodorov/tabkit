@@ -31,7 +31,7 @@ class GrpProgram(object):
     }
 
     >>> str(GrpProgram(grp_keys=['a'], grp_output=['a']) + GrpProgram(aggr_output=['c', 'd']))
-    '__key__0!=a{if(NR>1)print __key__0,c,d;__key__0=a;}END{if(NR>0)print __key__0,c,d;}'
+    'NR==1||__key__0!=a{if(NR>1)print __key__0,c,d;__key__0=a;}END{if(NR>0)print __key__0,c,d;}'
 
     """
     def __init__(self, init_aggr=None, grp_keys=None, grp_exprs=None, grp_output=None,
@@ -67,7 +67,7 @@ class GrpProgram(object):
         if aggr_exprs:
             aggr_exprs = "{%s}" % aggr_exprs
 
-        return "%s%s{if(NR>1)%s%s%s}%sEND{if(NR>0)%s}" % (
+        return "%sNR==1||%s{if(NR>1)%s%s%s}%sEND{if(NR>0)%s}" % (
             grp_exprs, key_cond, print_expr, key_exprs, init_aggr, aggr_exprs, print_expr)
 
 
@@ -85,7 +85,7 @@ def grp_program(data_desc, grp_exprs, aggr_exprs=None):
     {
         __var__0=(2**int(log($2)));
     }
-    __key__0!=$1||__key__1!=$2||__key__2!=__var__0{
+    NR==1||__key__0!=$1||__key__1!=$2||__key__2!=__var__0{
         if(NR>1)print __key__0,__key__1,__key__2,__aggr__1,__aggr__2;
         __key__0=$1;
         __key__1=$2;
