@@ -183,7 +183,18 @@ class parse_file(object):
         return next(self._iterator)
 
 
-def _str(value):  # dump True/False as 1/0 for lapidarity reasons
+def _str(value):
+    r"""
+    >>> _str(True)
+    '1'
+    >>> _str(False)
+    '0'
+    >>> _str(None)
+    ''
+    >>> _str("\r\t\n")
+    '\r\x0b\x0b'
+    """
+    # dump True/False as 1/0 for lapidarity reasons
     if value is True:
         return '1'
     if value is False:
@@ -191,8 +202,8 @@ def _str(value):  # dump True/False as 1/0 for lapidarity reasons
     if value is None:
         return ''
     if isinstance(value, unicode):
-        return value.encode('utf8')
-    return str(value)
+        value = value.encode('utf8')
+    return str(value).replace("\n", "\v").replace("\t", "\v")
 
 
 def Writer(fh, data_desc, strict=False, no_header=False):
@@ -267,12 +278,10 @@ class LooseWriter(WriterBase):
     >>> test_exception(lambda: write(c='True'))
     '''
 
-    def _get_values(self, kwargs):
-        for name in self.data_desc.field_names:
-            yield _str(kwargs.pop(name, ''))
-
     def __call__(self, **kwargs):
-        self.fh.write("%s\n" % "\t".join(self._get_values(kwargs)))
+        self.fh.write("%s\n" % "\t".join(
+            _str(kwargs.get(name)) for name in self.data_desc.field_names
+        ))
 
 
 class LogStream(object):

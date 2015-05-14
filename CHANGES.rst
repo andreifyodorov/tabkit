@@ -1,6 +1,11 @@
 Changes
 =======
 
+0.12
+----
+
+	* Writer substitutes \n, \t with \v
+
 0.11
 ----
 
