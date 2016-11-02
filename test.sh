@@ -27,28 +27,32 @@ diff -b <(
     run cat <( echo "bad header" ) 2>&1
 ) <(cat <<EOCASE
 cat: Bad header in file '/dev/fd/63'
-EOCASE) || failed bad_header
+EOCASE
+) || failed bad_header
 
 # bad_type
 diff -b <(
     run cat <( echo "# field:badtype" ) 2>&1
 ) <(cat <<EOCASE
 cat: Unknown type 'badtype' in file '/dev/fd/63'
-EOCASE) || failed bad_type
+EOCASE
+) || failed bad_type
 
 # incompatible_header
 diff -b <(
     run cat <( echo "# a" ) <( echo "# a:int" ) <( echo "# b" ) 2>&1
 ) <(cat <<EOCASE
 cat: Incompatible headers in file '/dev/fd/61'
-EOCASE) || failed incompatible_header
+EOCASE
+) || failed incompatible_header
 
 # compatible_header
 diff -b <(
     run cat <( echo "# a:int" ) <( echo "# a:float" ) <( echo "# a:bool" ) <( echo "# a:str" ) <( echo "# a" )
 ) <(cat <<EOCASE
 # a
-EOCASE) || failed compatible_header
+EOCASE
+) || failed compatible_header
 
 # cat_from_stream
 diff -b <(
@@ -59,28 +63,32 @@ diff -b <(
 2   0.2
 3   0.3
 4   0.4
-EOCASE) || failed cat_from_stream
+EOCASE
+) || failed cat_from_stream
 
 # cat_unknow_order_field
 diff -b <(
     echo -e "# a:int, b:float # ORDER: a,b,c" | run cat 2>&1
 ) <(cat <<EOCASE
 cat: Unknown order field 'c' in file '<stdin>'
-EOCASE) || failed cat_unknow_order_field
+EOCASE
+) || failed cat_unknow_order_field
 
 # cat_remove_order
 diff -b <(
     run cat <( echo -e "# a:int, b:float # ORDER: a,b:desc" ) <( echo -e "# a:int, b:float" )
 ) <(cat <<EOCASE
 # a:int b:float
-EOCASE) || failed cat_remove_order
+EOCASE
+) || failed cat_remove_order
 
 # cat_order_ok
 diff -b <(
     echo -e "# a:int, b:float # ORDER: a,b:desc" | run cat
 ) <(cat <<EOCASE
 # a:int b:float # ORDER: a, b:desc
-EOCASE) || failed cat_order_ok
+EOCASE
+) || failed cat_order_ok
 
 
 # cat_from_file
@@ -97,7 +105,8 @@ diff -b <(
 2   0.2
 3   0.3
 4   0.4
-EOCASE) || failed cat_from_file
+EOCASE
+) || failed cat_from_file
 rm -r $temp_file1 $temp_file2
 trap - EXIT
 
@@ -111,14 +120,16 @@ diff -b <(
 # a:int c
 1   a
 2   b
-EOCASE) || failed cut_keep
+EOCASE
+) || failed cut_keep
 
 # cut_keep_unknown_field
 diff -b <(
     echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | run cut -f a,c,d 2>&1
 ) <(cat <<EOCASE
 cut: No such field 'd'
-EOCASE) || failed cut_keep_unknown_field
+EOCASE
+) || failed cut_keep_unknown_field
 
 # cut_remove
 diff -b <(
@@ -127,21 +138,24 @@ diff -b <(
 # b:float
 0.1
 0.2
-EOCASE) || failed cut_remove
+EOCASE
+) || failed cut_remove
 
 # cut_remove_unknown_field
 diff -b <(
     echo -e "# a:int, b:float, c:str\n1\t0.1\ta\n2\t0.2\tb" | run cut -r a,c,d 2>&1
 ) <(cat <<EOCASE
 cut: No such field 'd'
-EOCASE) || failed cut_remove_unknown_field
+EOCASE
+) || failed cut_remove_unknown_field
 
 # cut_keep_order
 diff -b <(
     echo -e "# a,b,c,d # ORDER: a,b,c,d" | run cut -f a,b,d
 ) <(cat <<EOCASE
 # a b d # ORDER: a, b
-EOCASE) || failed cut_keep_order
+EOCASE
+) || failed cut_keep_order
 
 
 ###### tmap_awk
@@ -151,14 +165,16 @@ diff -b <(
     echo -e "# a, b, c, d" | run map -o "z" 2>&1
 ) <(cat <<EOCASE
 map: Unknown identifier 'z' in output expressions
-EOCASE) || failed map_uknown_identifier
+EOCASE
+) || failed map_uknown_identifier
 
 # map_bad_output_expr
 diff -b <(
     echo -e "# a, b, c, d" | run map -o "a==b and b==c" 2>&1
 ) <(cat <<EOCASE
 map: Syntax error: assign statements or field names expected in output expressions
-EOCASE) || failed map_bad_output_expr
+EOCASE
+) || failed map_bad_output_expr
 
 # map_int
 diff -b <(
@@ -168,7 +184,8 @@ diff -b <(
 0
 1
 1
-EOCASE) || failed map_int
+EOCASE
+) || failed map_int
 
 # map_sprintf
 diff -b <(
@@ -188,7 +205,8 @@ diff -b <(
 4  0   4   1   4
 6  0   9   1   9
 8  0  16   1  16
-EOCASE) || failed map_power
+EOCASE
+) || failed map_power
 
 # map_log_exp
 diff -b <(
@@ -198,7 +216,8 @@ diff -b <(
 2
 3
 4
-EOCASE) || failed map_log_exp
+EOCASE
+) || failed map_log_exp
 
 
 ###### tgrp_awk
@@ -209,7 +228,8 @@ diff -b <(
     echo -e "# a, b" | run group -o 'x=a;y=b' 2>&1
 ) <(cat <<EOCASE
 group: Syntax error: need aggregate function in aggregate expressions
-EOCASE) || failed grp_no_aggr
+EOCASE
+) || failed grp_no_aggr
 
 
 # grp_implicit_group
@@ -220,10 +240,12 @@ cat <<EOINPUT | run group -o 'x=sum(a)/sum(b)'
 1	3
 2	4
 3	5
-EOINPUT) <(cat <<EOCASE
+EOINPUT
+) <(cat <<EOCASE
 # x:float
 0.5
-EOCASE) || failed grp_implicit_group
+EOCASE
+) || failed grp_implicit_group
 
 
 # grp_explicit_group
@@ -236,13 +258,15 @@ cat <<EOINPUT | run group -g a -o 'x=sum(b)'
 2	2
 2	3
 3	5
-EOINPUT) <(cat <<EOCASE
+EOINPUT
+) <(cat <<EOCASE
 # a	x:int
 0	0
 1	1
 2	5
 3	5
-EOCASE) || failed grp_explicit_group
+EOCASE
+) || failed grp_explicit_group
 
 
 # grp_mixed_group
@@ -256,13 +280,15 @@ cat <<EOINPUT | run group -g "a;_hidden=b" -o 'x=sum(c)'
 2	2	1
 2	2	2
 3	5	3
-EOINPUT) <(cat <<EOCASE
+EOINPUT
+) <(cat <<EOCASE
 # a	x:int
 1	5
 1	4
 2	3
 3	3
-EOCASE) || failed grp_mixed_group
+EOCASE
+) || failed grp_mixed_group
 
 
 # grp_group_concat
@@ -276,12 +302,14 @@ cat <<EOINPUT | run group -g "a" -o 'x=group_concat(b)'
 2	red
 2	blue
 3	foobar
-EOINPUT) <(cat <<EOCASE
+EOINPUT
+) <(cat <<EOCASE
 # a	x
 1	apple, orange, kumquat
 2	red, blue
 3	foobar
-EOCASE) || failed grp_group_concat
+EOCASE
+) || failed grp_group_concat
 
 
 # grp_count
@@ -291,7 +319,34 @@ diff -b <(
 ) <(cat <<EOCASE
 # cnt:int
 5
-EOCASE) || failed grp_count
+EOCASE
+) || failed grp_count
+
+
+# grp_cumsum
+
+diff -b <(
+cat <<EOINPUT | run group -g a -o 'cumsum=cumsum(b); cumcount=cumcount()'
+# a, b:int
+a	1
+b	1
+b	1
+c	1
+c	1
+c	1
+d	4
+e	3
+e	2
+EOINPUT
+) <(cat <<EOCASE
+# a	cumsum:int	cumcount:int
+a	1	1
+b	3	3
+c	6	6
+d	10	7
+e	15	9
+EOCASE
+) || failed grp_cumsum
 
 
 ###### tsrt
@@ -304,7 +359,8 @@ diff -b <(
 b  3
 a  2
 a  10
-EOCASE) || failed sort_num
+EOCASE
+) || failed sort_num
 
 # sort_generic
 diff -b <(
@@ -314,7 +370,8 @@ diff -b <(
 .3e3
 .2e4
 .1e5
-EOCASE) || failed sort_generic
+EOCASE
+) || failed sort_generic
 
 
 ###### tpretty
@@ -329,7 +386,8 @@ diff -b <(
  3     | 2
        |
  a     |
-EOCASE) || failed pretty
+EOCASE
+) || failed pretty
 
 
 ###### tjoin
@@ -343,7 +401,8 @@ diff -b <(
     ) 2>&1
 ) <( cat <<EOCASE
 join: File '/dev/fd/62' must be sorted lexicographicaly ascending by the field 'id'
-EOCASE) || failed join_unsorted
+EOCASE
+) || failed join_unsorted
 
 # join_generic_key
 diff -b <(
@@ -355,7 +414,8 @@ diff -b <(
 ) <( cat <<EOCASE
 # id:int    # ORDER: id
 3
-EOCASE) || failed join_generic_key
+EOCASE
+) || failed join_generic_key
 
 # join
 diff -b <(
@@ -371,7 +431,8 @@ diff -b <(
 1   pomegranate red
 1   pomegranate ruby
 3   cucumber    green
-EOCASE) || failed join
+EOCASE
+) || failed join
 
 # join_a
 diff -b <(
@@ -388,7 +449,8 @@ diff -b <(
 1   pomegranate ruby
 3   cucumber    green
 4   -           purple
-EOCASE) || failed join_a
+EOCASE
+) || failed join_a
 
 # join_a_generic_key
 diff -b <(
@@ -406,7 +468,8 @@ diff -b <(
 1.5 orange      -
 3   cucumber    green
 4   -           purple
-EOCASE) || failed join_a_generic_key
+EOCASE
+) || failed join_a_generic_key
 
 
 # join_v1
@@ -419,7 +482,8 @@ diff -b <(
 ) <( cat <<EOCASE
 # id:int    fruit # ORDER: id, fruit
 2   orange
-EOCASE) || failed join_v1
+EOCASE
+) || failed join_v1
 
 
 # join_v_generic_key
@@ -433,4 +497,5 @@ diff -b <(
 # id    fruit   color # ORDER: id, fruit, color
 2   orange  -
 4   -   purple
-EOCASE) || failed join_v_generic_key
+EOCASE
+) || failed join_v_generic_key

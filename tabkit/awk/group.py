@@ -168,53 +168,62 @@ class SimpleAggregateExpressions(AggregateExpression, SimpleExpression):
 
 
 class AggregateFunction(object):
-    init_code_template = "{var_name}=0"
+    init_code_template = None
+    code_template = None
+
+    def _set_code_attr(self, attr, *args, **kwargs):
+        template = getattr(self, "%s_template" % attr)
+        setattr(self, attr, template.format(*args, **kwargs) if template else None)
 
     def __init__(self, var_name, *args, **kwargs):
-        self.var_name = var_name
-        self.args = tuple(arg.code for arg in args)
-        self.kwargs = kwargs
-
-    @property
-    def init_code(self):
-        return self.init_code_template.format(var_name=self.var_name, **self.kwargs)
-
-    @property
-    def code(self):
-        return self.code_template.format(*self.args, var_name=self.var_name, **self.kwargs)
+        self._set_code_attr('init_code', var_name=var_name, **kwargs)
+        self._set_code_attr('code', *(arg.code for arg in args), var_name=var_name, **kwargs)
 
 
-class SumFunction(AggregateFunction):
+class CumulativeSumFunction(AggregateFunction):
     code_template = "{var_name}+={0}"
 
     def __init__(self, var_name, arg):
-        super(SumFunction, self).__init__(var_name, arg)
+        super(CumulativeSumFunction, self).__init__(var_name, arg)
         self.type = arg.type
 
 
-class CountFunction(AggregateFunction):
+class SumFunction(CumulativeSumFunction):
+    init_code_template = "{var_name}=0"
+
+
+class CumulativeCountFunction(AggregateFunction):
     code_template = "{var_name}++"
 
     def __init__(self, var_name):
-        super(CountFunction, self).__init__(var_name)
+        super(CumulativeCountFunction, self).__init__(var_name)
         self.type = TabkitTypes.int
+
+
+class CountFunction(CumulativeCountFunction):
+    init_code_template = "{var_name}=0"
 
 
 class GroupConcatFunction(AggregateFunction):
     init_code_template = '{var_name}=""'
-    code_template = '{var_name} = {var_name} ({var_name}?{delimeter}:""){0}'
+    code_template = '{var_name}={var_name} ({var_name}?{delimeter}:"") {0}'
 
     def __init__(self, var_name, arg, delimeter=None):
-        if delimeter is None:
-            delimeter = ", "
-        delimeter = '"%s"' % delimeter.replace('"', '\\"')
+        if delimeter:
+            if delimeter.type != TabkitTypes.str:
+                raise TabkitException("Syntax error: group_concat delimiter should be string")
+            delimeter = delimeter.code
+        else:
+            delimeter = '", "'
         super(GroupConcatFunction, self).__init__(var_name, arg, delimeter=delimeter)
         self.type = TabkitTypes.str
 
 
 class AggregateAwkNodeVisitor(AwkNodeVisitor):
     aggregate_funcs = {
+        'cumsum': CumulativeSumFunction,
         'sum': SumFunction,
+        'cumcount': CumulativeCountFunction,
         'count': CountFunction,
         'group_concat': GroupConcatFunction
     }
@@ -241,7 +250,7 @@ class AggregateAwkGenerator(AggregateAwkNodeVisitor, OutputAwkGenerator):
         self.aggregators = list()
 
     def init_code(self):
-        return (aggr.init_code for aggr in self.aggregators)
+        return (aggr.init_code for aggr in self.aggregators if aggr.init_code)
 
     def visit(self, node):
         """ If all constituent expression are aggregated, then the result is aggregated """
