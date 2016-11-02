@@ -1,6 +1,13 @@
 Changes
 =======
 
+0.13
+----
+
+	* Cumulative sum.
+    * Cumulative count.
+    * Fix group concat delimeter argument.
+
 0.12
 ----
 
