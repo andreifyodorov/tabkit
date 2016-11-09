@@ -312,13 +312,24 @@ EOCASE
 ) || failed grp_group_concat
 
 
-# grp_count
+# grp_count_sum_min_max
 
 diff -b <(
-    echo -e "# a\n1\n2\n3\n4\n5" | run group -o 'cnt=count()'
+    cat <<EOINPUT | run group -g a -o 'cnt=count();sum=sum(x);min=min(x);max=max(x)'
+# a, x:int
+foo	1
+foo	2
+foo	3
+foo	4
+foo	5
+bar	3
+bar	4
+bar	6
+EOINPUT
 ) <(cat <<EOCASE
-# cnt:int
-5
+# a	cnt:int	sum:int	min:int	max:int
+foo	5	15	1	5
+bar	3	13	3	6
 EOCASE
 ) || failed grp_count
 

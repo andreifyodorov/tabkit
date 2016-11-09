@@ -180,18 +180,6 @@ class AggregateFunction(object):
         self._set_code_attr('code', *(arg.code for arg in args), var_name=var_name, **kwargs)
 
 
-class CumulativeSumFunction(AggregateFunction):
-    code_template = "{var_name}+={0}"
-
-    def __init__(self, var_name, arg):
-        super(CumulativeSumFunction, self).__init__(var_name, arg)
-        self.type = arg.type
-
-
-class SumFunction(CumulativeSumFunction):
-    init_code_template = "{var_name}=0"
-
-
 class CumulativeCountFunction(AggregateFunction):
     code_template = "{var_name}++"
 
@@ -201,6 +189,18 @@ class CumulativeCountFunction(AggregateFunction):
 
 
 class CountFunction(CumulativeCountFunction):
+    init_code_template = "{var_name}=0"
+
+
+class CumulativeSumFunction(AggregateFunction):
+    code_template = "{var_name}+={0}"
+
+    def __init__(self, var_name, arg):
+        super(CumulativeSumFunction, self).__init__(var_name, arg)
+        self.type = arg.type
+
+
+class SumFunction(CumulativeSumFunction):
     init_code_template = "{var_name}=0"
 
 
@@ -219,13 +219,33 @@ class GroupConcatFunction(AggregateFunction):
         self.type = TabkitTypes.str
 
 
+class GenericCompareFunction(AggregateFunction):
+    op = None
+    init_code_template = '{var_name}_is_none=1;{var_name}=""'
+    code_template = 'if({var_name}_is_none||{0}{op}{var_name}){{{var_name}={0};{var_name}_is_none=0}}'
+
+    def __init__(self, var_name, arg):
+        self.type = arg.type
+        super(GenericCompareFunction, self).__init__(var_name, arg, op=self.op)
+
+
+class GroupMaxFunction(GenericCompareFunction):
+    op = ">"
+
+
+class GroupMinFunction(GenericCompareFunction):
+    op = "<"
+
+
 class AggregateAwkNodeVisitor(AwkNodeVisitor):
     aggregate_funcs = {
         'cumsum': CumulativeSumFunction,
         'sum': SumFunction,
         'cumcount': CumulativeCountFunction,
         'count': CountFunction,
-        'group_concat': GroupConcatFunction
+        'group_concat': GroupConcatFunction,
+        'min': GroupMinFunction,
+        'max': GroupMaxFunction,
     }
 
     def visit_Call(self, node):
